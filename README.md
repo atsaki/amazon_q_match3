@@ -116,6 +116,56 @@ uv run pytest tests/test_match3_game.py -v
 uv run pytest tests/test_highscore_manager.py -v
 ```
 
+## 🔧 コード品質
+
+### Linter & Formatter (Ruff)
+
+このプロジェクトではコード品質管理にRuffを使用しています。
+
+```bash
+# コードのlintチェック
+uv run ruff check .
+
+# 自動修正可能なエラーを修正
+uv run ruff check --fix .
+
+# コードフォーマット
+uv run ruff format .
+
+# 統計情報付きでチェック
+uv run ruff check . --statistics
+```
+
+### Pre-commit フック
+
+コミット時に自動でコード品質チェックとテストを実行します。
+
+```bash
+# pre-commitフックをインストール（初回のみ）
+uv run pre-commit install
+
+# 手動でpre-commitを実行
+uv run pre-commit run --all-files
+
+# 特定のフックのみ実行
+uv run pre-commit run ruff
+uv run pre-commit run pytest
+```
+
+#### 自動実行される内容
+- **Ruff Linter**: コードの品質チェック（自動修正付き）
+- **Ruff Formatter**: コードフォーマット
+- **pytest**: 全テストの実行
+- **基本チェック**: 末尾空白、ファイル終端、YAML/TOML構文など
+
+### 設定
+
+Ruffの設定は`pyproject.toml`で管理されています：
+- 行長制限: 100文字
+- Python 3.13対応
+- 包括的なルールセット（pycodestyle, Pyflakes, isort等）
+- ゲーム開発に適したカスタムルール
+
 ### テスト構成
 
 - **総テスト数**: 35個（24個のゲームテスト + 11個のハイスコアテスト）
@@ -240,6 +290,6 @@ uv run pytest tests/ --cov=src/amazon_q_match3 --cov-report=term-missing
 
 ### 🎊 新機能で楽しもう！
 - 短時間集中の30秒モード
-- じっくり戦略の3分モード  
+- じっくり戦略の3分モード
 - ハイスコア更新を目指そう
 - 友達とスコアを競い合おう
