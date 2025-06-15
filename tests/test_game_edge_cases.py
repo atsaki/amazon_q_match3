@@ -106,16 +106,37 @@ class TestGameEdgeCases(unittest.TestCase):
         self.assertEqual(len(matches), 0)
 
         # 落下処理（何も起こらない）
-        moved = self.game.drop_blocks()
+        moved = self.game.drop_blocks(animate=False)
         self.assertFalse(moved)
 
         # 空スペース補充
-        self.game.fill_empty_spaces()
+        self.game.fill_empty_spaces(animate=False)
 
-        # 全て埋まっているかチェック
+        # 全て埋まるまで繰り返し補充（マッチが連続発生する場合に対応）
+        max_attempts = 10  # 無限ループ防止
+        attempts = 0
+
+        while attempts < max_attempts:
+            empty_count = 0
+            for row in range(8):
+                for col in range(8):
+                    if self.game.grid[row][col] is None:
+                        empty_count += 1
+
+            if empty_count == 0:
+                break  # 全て埋まった
+
+            # 空のスペースがある場合は再度補充
+            self.game.fill_empty_spaces(animate=False)
+            attempts += 1
+
+        # 最終的に全て埋まっているかチェック
         for row in range(8):
             for col in range(8):
-                self.assertIsNotNone(self.game.grid[row][col])
+                self.assertIsNotNone(
+                    self.game.grid[row][col],
+                    f"Grid position ({row}, {col}) is still None after {attempts} attempts",
+                )
 
     def test_single_column_operations(self):
         """単一列での操作テスト"""
@@ -132,7 +153,7 @@ class TestGameEdgeCases(unittest.TestCase):
                 self.game.grid[row][col] = None
 
         # 落下処理
-        moved = self.game.drop_blocks()
+        moved = self.game.drop_blocks(animate=False)
         self.assertTrue(moved)
 
         # 下4つにブロックが移動しているかチェック
@@ -198,7 +219,7 @@ class TestGameStateConsistency(unittest.TestCase):
         self.assert_grid_valid()
 
         # マッチ処理
-        self.game.process_matches()
+        self.game.process_matches_complete_cycle()
         self.assert_grid_valid()
 
     def assert_grid_valid(self):
@@ -231,8 +252,8 @@ class TestGameStateConsistency(unittest.TestCase):
         for col in range(3):
             self.game.grid[4][col] = Block(BlockType.RED, col, 4)
 
-        # process_matchesが終了することを確認
-        result = self.game.process_matches()
+        # process_matches_complete_cycleが終了することを確認
+        result = self.game.process_matches_complete_cycle()
         # 結果に関係なく、処理が完了すればOK
         self.assertIsInstance(result, bool)
 

@@ -134,7 +134,8 @@ class TestHighScoreManager(unittest.TestCase):
 
         best_score, best_mode = self.manager.get_all_time_best()
         self.assertEqual(best_score, 1200)
-        self.assertEqual(best_mode, "60秒")
+        # JSONから読み込む際にキーが文字列になるため
+        self.assertEqual(best_mode, "60")
 
     def test_clear_highscores(self):
         """ハイスコアクリアテスト"""

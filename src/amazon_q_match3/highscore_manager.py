@@ -144,7 +144,7 @@ class HighScoreManager:
         for time_limit, scores in self.highscores.items():
             if scores and scores[0]["score"] > best_score:
                 best_score = scores[0]["score"]
-                best_mode = f"{time_limit}秒"
+                best_mode = time_limit
 
         return best_score, best_mode
 

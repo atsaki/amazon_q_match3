@@ -1,6 +1,9 @@
+import contextlib
 import logging
+import math
 import random
 import sys
+import time
 from enum import Enum
 from pathlib import Path
 
@@ -59,6 +62,21 @@ COLORS = {
     "WHITE": (255, 255, 255),
     "BLACK": (0, 0, 0),
     "GRAY": (128, 128, 128),
+    "LIGHT_GRAY": (192, 192, 192),
+}
+
+# 単色版（UI用）
+UI_COLORS = {
+    "RED": (255, 100, 100),
+    "BLUE": (100, 150, 255),
+    "GREEN": (100, 255, 100),
+    "YELLOW": (255, 255, 100),
+    "PURPLE": (255, 100, 255),
+    "ORANGE": (255, 165, 0),
+    "WHITE": (255, 255, 255),
+    "BLACK": (0, 0, 0),
+    "GRAY": (128, 128, 128),
+    "LIGHT_GRAY": (192, 192, 192),
 }
 
 
@@ -79,42 +97,157 @@ class AnimationType(Enum):
     SPAWN = 4
 
 
+class ScorePopup:
+    """スコア表示用のポップアップクラス"""
+
+    def __init__(self, x, y, score, color=(255, 255, 0)):
+        self.x = x
+        self.y = y
+        self.start_y = y
+        self.score = score
+        self.color = color
+        self.life = 2.0  # 2秒間表示
+        self.font_size = 36  # 24 * 1.5 = 36
+
+    def update(self, dt):
+        """ポップアップの更新"""
+        self.life -= dt
+        # 上に移動（2秒間でより高く上昇）
+        self.y = self.start_y - (1.0 - self.life / 2.0) * 80  # 2秒で80ピクセル上昇
+
+        return self.life > 0
+
+    def draw(self, screen, font):
+        """ポップアップの描画"""
+        if self.life > 0:
+            # フェードアウト効果（残りライフに応じて透明度を調整）
+            alpha = min(255, int(255 * (self.life / 2.0)))  # 2秒でフェードアウト
+
+            # 色にアルファ値を適用
+            fade_color = (*self.color[:3], alpha) if len(self.color) == 4 else (*self.color, alpha)
+            shadow_color = (0, 0, 0, alpha // 2)  # 影は半透明
+
+            # より大きなフォントでスコアテキストを作成
+            large_font = pygame.font.Font(None, self.font_size)
+            score_text = large_font.render(f"+{self.score}", True, fade_color[:3])
+            shadow_text = large_font.render(f"+{self.score}", True, shadow_color[:3])
+
+            # 透明度を適用するためのサーフェスを作成
+            if alpha < 255:
+                # 透明度付きサーフェスを作成
+                text_surface = pygame.Surface(score_text.get_size(), pygame.SRCALPHA)
+                shadow_surface = pygame.Surface(shadow_text.get_size(), pygame.SRCALPHA)
+
+                text_surface.blit(score_text, (0, 0))
+                shadow_surface.blit(shadow_text, (0, 0))
+
+                text_surface.set_alpha(alpha)
+                shadow_surface.set_alpha(alpha // 2)
+
+                screen.blit(shadow_surface, (self.x + 2, self.y + 2))
+                screen.blit(text_surface, (self.x, self.y))
+            else:
+                # 通常の描画
+                screen.blit(shadow_text, (self.x + 2, self.y + 2))
+                screen.blit(score_text, (self.x, self.y))
+
+
 class Particle:
+    """パーティクル効果用のクラス（強化版）"""
+
     def __init__(self, x, y, color):
         self.x = x
         self.y = y
-        self.vx = random.uniform(-3, 3)
-        self.vy = random.uniform(-5, -1)
-        self.life = 1.0
+        self.start_x = x
+        self.start_y = y
         self.color = color
-        self.size = random.uniform(2, 4)
+
+        # より派手な動きのパラメータ
+        angle = random.uniform(0, 2 * math.pi)
+        speed = random.uniform(50, 150)  # 速度を上げる
+        self.vx = math.cos(angle) * speed
+        self.vy = math.sin(angle) * speed - random.uniform(20, 60)  # 上向きの初速度
+
+        # 重力と減衰
+        self.gravity = 200  # 重力を強化
+        self.friction = 0.98
+
+        # 見た目の強化
+        self.life = random.uniform(1.0, 2.0)  # 寿命を延長
+        self.max_life = self.life
+        self.size = random.uniform(3, 8)  # サイズをランダム化
+        self.rotation = 0
+        self.rotation_speed = random.uniform(-360, 360)  # 回転速度
 
     def update(self, dt):
-        self.x += self.vx * dt * 60
-        self.y += self.vy * dt * 60
-        self.vy += 0.2  # 重力
-        self.life -= dt * 2
+        """パーティクルの更新（強化版）"""
+        # 物理演算
+        self.vx *= self.friction
+        self.vy += self.gravity * dt
+
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+
+        # 回転
+        self.rotation += self.rotation_speed * dt
+
+        # 寿命の減少
+        self.life -= dt
+
         return self.life > 0
 
     def draw(self, screen):
-        """パーティクルを描画（安全版）"""
+        """パーティクルの描画（強化版）"""
         try:
             if self.life > 0:
-                alpha = max(0, min(255, int(self.life * 255)))
-                size = max(1, int(self.size * self.life))
+                # フェードアウト効果
+                alpha_ratio = self.life / self.max_life
 
-                if size > 0 and alpha > 0:
-                    # 安全な色の処理
-                    if isinstance(self.color, list | tuple) and len(self.color) >= 3:
-                        color_rgb = self.color[:3]
-                    else:
-                        color_rgb = (255, 255, 255)
+                # 色の計算（フェードアウト）
+                if isinstance(self.color, list | tuple) and len(self.color) >= 3:
+                    r, g, b = self.color[:3]
+                else:
+                    r, g, b = 255, 255, 255
 
-                    surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
-                    pygame.draw.circle(surf, (*color_rgb, alpha), (size, size), size)
-                    screen.blit(surf, (int(self.x - size), int(self.y - size)))
+                fade_color = (int(r * alpha_ratio), int(g * alpha_ratio), int(b * alpha_ratio))
+
+                # サイズの変化（最初大きく、徐々に小さく）
+                current_size = self.size * (0.5 + 0.5 * alpha_ratio)
+
+                # 星形パーティクルを描画
+                self._draw_star(screen, int(self.x), int(self.y), int(current_size), fade_color)
         except Exception:
-            pass  # 描画エラーは無視
+            # エラー時は何もしない
+            pass
+
+    def _draw_star(self, screen, x, y, size, color):
+        """星形パーティクルを描画"""
+        try:
+            # 簡単な星形（4つの線）
+            points = []
+            for i in range(8):
+                angle = (i * math.pi / 4) + math.radians(self.rotation)
+                if i % 2 == 0:
+                    # 外側の点
+                    px = x + math.cos(angle) * size
+                    py = y + math.sin(angle) * size
+                else:
+                    # 内側の点
+                    px = x + math.cos(angle) * size * 0.5
+                    py = y + math.sin(angle) * size * 0.5
+                points.append((px, py))
+
+            # 星形を描画
+            if len(points) >= 3:
+                pygame.draw.polygon(screen, color, points)
+            else:
+                # フォールバック：円
+                pygame.draw.circle(screen, color, (x, y), max(1, int(size)))
+
+        except Exception:
+            # エラー時のフォールバック：円
+            with contextlib.suppress(Exception):
+                pygame.draw.circle(screen, color, (x, y), max(1, int(size)))
 
 
 class Block:
@@ -271,7 +404,18 @@ class Match3Game:
         # アニメーション関連
         self.animating = False
         self.particles = []
+        self.score_popups = []  # スコアポップアップリスト
         self.dt = 0
+
+        # 連鎖時の停止機能
+        self.match_highlight_timer = 0.0
+        self.highlighted_matches = []
+        self.is_highlighting = False
+
+        # ブロック落下前の待機機能
+        self.drop_delay_timer = 0.0
+        self.is_waiting_for_drop = False
+        self.pending_drop = False
 
         # Fonts (English only, optimized sizes)
         try:
@@ -285,6 +429,7 @@ class Match3Game:
             self.font = pygame.font.Font(None, 32)
             self.big_font = pygame.font.Font(None, 64)
             self.small_font = pygame.font.Font(None, 18)
+            self.score_font = pygame.font.Font(None, 24)  # スコアポップアップ用
             self.logger.warning("Using default fonts")
 
         self.logger.info("Game initialization completed successfully")
@@ -298,6 +443,7 @@ class Match3Game:
         self.selected_block = None
         self.game_over = False
         self.game_started = False
+        self.pending_match_check = None
 
         # グリッドを初期化（ゲーム開始時のみ）
         if hasattr(self, "grid"):
@@ -335,8 +481,10 @@ class Match3Game:
                 block_type = random.choice(valid_types)
                 self.grid[row][col] = Block(block_type, col, row)
 
-    def draw_grid(self):
-        """グリッドとブロックを描画（アニメーション対応）"""
+    def draw_grid_only(self):
+        """グリッドとブロックのみを描画（エフェクトは除く）"""
+        self.logger.debug("Drawing grid only")
+
         # グリッドの背景を描画
         for row in range(GRID_SIZE):
             for col in range(GRID_SIZE):
@@ -344,7 +492,72 @@ class Match3Game:
                 y = GRID_OFFSET_Y + row * CELL_SIZE
 
                 # グリッドの枠を描画
-                pygame.draw.rect(self.screen, COLORS["GRAY"], (x, y, CELL_SIZE, CELL_SIZE), 2)
+                pygame.draw.rect(self.screen, UI_COLORS["GRAY"], (x, y, CELL_SIZE, CELL_SIZE), 2)
+
+        # ブロックを描画
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                if self.grid[row][col]:
+                    self.grid[row][col].draw(self.screen)
+
+        # 選択されたブロックのハイライト
+        if self.selected_block:
+            row, col = self.selected_block
+            x = GRID_OFFSET_X + col * CELL_SIZE
+            y = GRID_OFFSET_Y + row * CELL_SIZE
+            pygame.draw.rect(self.screen, UI_COLORS["WHITE"], (x, y, CELL_SIZE, CELL_SIZE), 4)
+
+        # 連鎖ハイライト（黄色の点滅）
+        if self.is_highlighting and self.highlighted_matches:
+            for row, col in self.highlighted_matches:
+                x = GRID_OFFSET_X + col * CELL_SIZE + CELL_SIZE // 2
+                y = GRID_OFFSET_Y + row * CELL_SIZE + CELL_SIZE // 2
+
+                # 点滅効果
+                alpha = int(128 + 127 * abs(math.sin(pygame.time.get_ticks() * 0.01)))
+                highlight_radius = CELL_SIZE // 3
+
+                # 黄色の円でハイライト
+                if alpha > 100:  # 一定の透明度以上の時のみ描画
+                    try:
+                        draw_x = x
+                        draw_y = y
+                        pygame.draw.circle(
+                            self.screen,
+                            UI_COLORS["WHITE"],
+                            (int(draw_x), int(draw_y)),
+                            highlight_radius,
+                            3,
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Error drawing highlight at ({row}, {col}): {e}")
+
+    def draw_effects(self):
+        """エフェクト（パーティクル、スコアポップアップ）を描画"""
+        self.logger.debug("Drawing effects")
+
+        # パーティクルを描画
+        for particle in self.particles:
+            particle.draw(self.screen)
+
+        # スコアポップアップを描画
+        for popup in self.score_popups:
+            # score_fontの存在チェック
+            font_to_use = getattr(self, "score_font", self.small_font)
+            popup.draw(self.screen, font_to_use)
+
+    def draw_grid(self):
+        """グリッドとブロックを描画（アニメーション対応）"""
+        self.logger.debug("Drawing grid")
+
+        # グリッドの背景を描画
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                x = GRID_OFFSET_X + col * CELL_SIZE
+                y = GRID_OFFSET_Y + row * CELL_SIZE
+
+                # グリッドの枠を描画
+                pygame.draw.rect(self.screen, UI_COLORS["GRAY"], (x, y, CELL_SIZE, CELL_SIZE), 2)
 
         # ブロックを描画（アニメーション位置で）
         for row in range(GRID_SIZE):
@@ -361,11 +574,37 @@ class Match3Game:
                         highlight_radius = CELL_SIZE // 2 + 4
                         pygame.draw.circle(
                             self.screen,
-                            COLORS["WHITE"],
+                            UI_COLORS["WHITE"],
                             (int(draw_x), int(draw_y)),
                             highlight_radius,
                             3,
                         )
+
+                    # 連鎖ハイライト（点滅効果）
+                    if self.is_highlighting and (row, col) in self.highlighted_matches:
+                        # 点滅効果
+                        flash_intensity = abs(math.sin(self.match_highlight_timer * 20)) * 0.5 + 0.5
+                        highlight_color = (255, 255, 0)  # 黄色
+                        highlight_radius = CELL_SIZE // 2 + 6
+
+                        # 外側のリング
+                        pygame.draw.circle(
+                            self.screen,
+                            highlight_color,
+                            (int(draw_x), int(draw_y)),
+                            highlight_radius,
+                            int(4 * flash_intensity),
+                        )
+
+                        # 内側の光る効果
+                        inner_radius = int(highlight_radius * 0.8 * flash_intensity)
+                        if inner_radius > 0:
+                            pygame.draw.circle(
+                                self.screen,
+                                (*highlight_color, int(100 * flash_intensity)),
+                                (int(draw_x), int(draw_y)),
+                                inner_radius,
+                            )
 
                     # グラデーション円を描画
                     colors = block.get_colors()
@@ -378,43 +617,109 @@ class Match3Game:
         for particle in self.particles:
             particle.draw(self.screen)
 
+        # スコアポップアップを描画
+        for popup in self.score_popups:
+            # score_fontの存在チェック
+            font_to_use = getattr(self, "score_font", self.small_font)
+            popup.draw(self.screen, font_to_use)
+
     def draw_ui(self):
-        """Draw UI elements (English version)"""
+        """Draw UI elements (Enhanced version with better time display)"""
+        self.logger.info(f"Drawing UI elements - Score: {self.score}, Time: {self.time_left:.1f}")
+
         # Score display
-        score_text = self.font.render(f"Score: {self.score}", True, COLORS["WHITE"])
+        score_text = self.font.render(f"Score: {self.score}", True, UI_COLORS["WHITE"])
         self.screen.blit(score_text, (WINDOW_WIDTH - 200, 20))
 
-        # Time remaining display (color-coded)
-        minutes = int(self.time_left) // 60
-        seconds = int(self.time_left) % 60
+        # Time remaining display (enhanced with better visibility)
+        # ゲームオーバー時は時間を0に固定
+        display_time = max(0, self.time_left) if not self.game_over else 0
+        minutes = int(display_time) // 60
+        seconds = int(display_time) % 60
 
-        # Change color based on time remaining
-        if self.time_left > 30:
-            time_color = COLORS["WHITE"]
-        elif self.time_left > 10:
-            time_color = COLORS["YELLOW"]
+        # Change color based on time remaining with more dramatic effects
+        if display_time > 30:
+            time_color = UI_COLORS["WHITE"]
+            time_bg_color = None
+        elif display_time > 10:
+            time_color = UI_COLORS["YELLOW"]
+            time_bg_color = (64, 64, 0)  # Dark yellow background
         else:
-            time_color = COLORS["RED"]
+            time_color = UI_COLORS["RED"]
+            time_bg_color = (64, 0, 0)  # Dark red background
+            # Add blinking effect for critical time (but not when game over)
+            if not self.game_over and int(time.time() * 2) % 2:  # Blink every 0.5 seconds
+                time_color = UI_COLORS["WHITE"]
 
-        time_text = self.font.render(f"Time: {minutes:02d}:{seconds:02d}", True, time_color)
-        self.screen.blit(time_text, (WINDOW_WIDTH - 200, 60))
+        # Create time text with background for better visibility
+        time_text = f"Time: {minutes:02d}:{seconds:02d}"
+        time_surface = self.font.render(time_text, True, time_color)
+
+        self.logger.debug(f"Drawing time: {time_text} with color {time_color}")
+
+        # Draw background for critical time
+        if time_bg_color and not self.game_over:  # No background when game over
+            time_rect = time_surface.get_rect()
+            time_rect.topleft = (WINDOW_WIDTH - 200, 60)
+            # Expand background slightly
+            bg_rect = time_rect.inflate(10, 4)
+            pygame.draw.rect(self.screen, time_bg_color, bg_rect)
+            pygame.draw.rect(self.screen, time_color, bg_rect, 2)  # Border
+
+        self.screen.blit(time_surface, (WINDOW_WIDTH - 200, 60))
 
         # Time limit mode display
-        mode_text = self.small_font.render(f"Mode: {self.time_limit}s", True, COLORS["LIGHT_GRAY"])
+        time_label = self._get_time_label(self.time_limit)
+        mode_text = self.small_font.render(f"Mode: {time_label}", True, UI_COLORS["LIGHT_GRAY"])
         self.screen.blit(mode_text, (WINDOW_WIDTH - 200, 100))
 
         # Current best score display
         best_score = self.highscore_manager.get_best_score(self.time_limit)
         if best_score > 0:
-            best_text = self.small_font.render(f"Best: {best_score}", True, COLORS["YELLOW"])
+            # 時間制限に応じた単位表示
+            time_label = self._get_time_label(self.time_limit)
+            best_text = self.small_font.render(
+                f"Best ({time_label}): {best_score}", True, UI_COLORS["YELLOW"]
+            )
             self.screen.blit(best_text, (WINDOW_WIDTH - 200, 120))
 
+        # Progress bar for time remaining (visual indicator)
+        progress_width = 180
+        progress_height = 8
+        progress_x = WINDOW_WIDTH - 200
+        progress_y = 140  # 時間表示やベストスコアと重ならないように下に移動
+
+        # Background bar
+        pygame.draw.rect(
+            self.screen,
+            UI_COLORS["GRAY"],
+            (progress_x, progress_y, progress_width, progress_height),
+        )
+
+        # Progress fill (0 when game over)
+        progress_ratio = self.time_left / self.time_limit if not self.game_over else 0
+
+        fill_width = int(progress_width * progress_ratio)
+
+        # Color based on remaining time
+        if progress_ratio > 0.5:
+            progress_color = UI_COLORS["GREEN"]
+        elif progress_ratio > 0.25:
+            progress_color = UI_COLORS["YELLOW"]
+        else:
+            progress_color = UI_COLORS["RED"]
+
+        if fill_width > 0:
+            pygame.draw.rect(
+                self.screen, progress_color, (progress_x, progress_y, fill_width, progress_height)
+            )
+
         # Instructions
-        help_text = self.small_font.render("Click blocks to swap", True, COLORS["WHITE"])
+        help_text = self.small_font.render("Click blocks to swap", True, UI_COLORS["WHITE"])
         self.screen.blit(help_text, (20, WINDOW_HEIGHT - 60))
 
         # Menu hint
-        menu_hint = self.small_font.render("ESC: Menu", True, COLORS["LIGHT_GRAY"])
+        menu_hint = self.small_font.render("ESC: Menu", True, UI_COLORS["LIGHT_GRAY"])
         self.screen.blit(menu_hint, (20, WINDOW_HEIGHT - 40))
 
     def get_grid_position(self, mouse_pos):
@@ -433,23 +738,35 @@ class Match3Game:
         row2, col2 = pos2
         return abs(row1 - row2) + abs(col1 - col2) == 1
 
-    def swap_blocks(self, pos1, pos2):
-        """ブロックを交換（簡素版）"""
+    def swap_blocks(self, pos1, pos2, animate=True):
+        """ブロックを交換（アニメーション対応版）"""
         row1, col1 = pos1
         row2, col2 = pos2
 
+        block1 = self.grid[row1][col1]
+        block2 = self.grid[row2][col2]
+
+        if not block1 or not block2:
+            return
+
         # ブロックを交換
-        self.grid[row1][col1], self.grid[row2][col2] = self.grid[row2][col2], self.grid[row1][col1]
+        self.grid[row1][col1], self.grid[row2][col2] = block2, block1
 
         # グリッド座標を更新
-        if self.grid[row1][col1]:
-            self.grid[row1][col1].grid_x, self.grid[row1][col1].grid_y = col1, row1
-            self.grid[row1][col1].draw_x = col1 * CELL_SIZE
-            self.grid[row1][col1].draw_y = row1 * CELL_SIZE
-        if self.grid[row2][col2]:
-            self.grid[row2][col2].grid_x, self.grid[row2][col2].grid_y = col2, row2
-            self.grid[row2][col2].draw_x = col2 * CELL_SIZE
-            self.grid[row2][col2].draw_y = row2 * CELL_SIZE
+        block1.grid_x, block1.grid_y = col2, row2
+        block2.grid_x, block2.grid_y = col1, row1
+
+        if animate:
+            # アニメーションを開始
+            block1.start_animation(AnimationType.SWAP, col2, row2)
+            block2.start_animation(AnimationType.SWAP, col1, row1)
+            self.logger.debug(f"Started swap animation: ({row1},{col1}) <-> ({row2},{col2})")
+        else:
+            # 即座に位置を更新
+            block1.draw_x = col2 * CELL_SIZE
+            block1.draw_y = row2 * CELL_SIZE
+            block2.draw_x = col1 * CELL_SIZE
+            block2.draw_y = row1 * CELL_SIZE
 
     def find_matches(self):
         """マッチするブロックを検出（ログ対応版）"""
@@ -547,7 +864,7 @@ class Match3Game:
         return matches
 
     def remove_matches(self, matches):
-        """マッチしたブロックを削除してスコアを加算（ログ対応版）"""
+        """マッチしたブロックを削除してスコアを加算（強化版）"""
         if not matches:
             return False
 
@@ -557,17 +874,34 @@ class Match3Game:
             # スコア計算
             match_count = len(matches)
             old_score = self.score
-            if match_count == 3:
-                self.score += 100
-            elif match_count == 4:
-                self.score += 200
-            elif match_count == 5:
-                self.score += 500
-            else:
-                self.score += 100 * match_count
+            score_gained = 0
 
+            if match_count == 3:
+                score_gained = 100
+            elif match_count == 4:
+                score_gained = 200
+            elif match_count == 5:
+                score_gained = 500
+            else:
+                score_gained = 100 * match_count
+
+            self.score += score_gained
+
+            self.logger.info(f"Score updated: {old_score} -> {self.score} (+{score_gained})")
+
+            # マッチの中心位置を計算（スコア表示用）
+            center_x = sum(col for row, col in matches) / len(matches)
+            center_y = sum(row for row, col in matches) / len(matches)
+
+            # スクリーン座標に変換
+            screen_x = GRID_OFFSET_X + center_x * CELL_SIZE + CELL_SIZE // 2
+            screen_y = GRID_OFFSET_Y + center_y * CELL_SIZE + CELL_SIZE // 2
+
+            # スコアポップアップを作成
+            score_popup = ScorePopup(screen_x, screen_y, score_gained)
+            self.score_popups.append(score_popup)
             self.logger.info(
-                f"Score updated: {old_score} -> {self.score} (+{self.score - old_score})"
+                f"Created score popup: +{score_gained} at ({screen_x}, {screen_y}), total popups: {len(self.score_popups)}"
             )
 
             # 安全にブロックを削除
@@ -577,11 +911,12 @@ class Match3Game:
                     if self.grid[row][col]:
                         self.logger.debug(f"Removing block at ({row}, {col})")
 
-                        # パーティクル効果を生成（安全版）
+                        # より派手なパーティクル効果を生成
                         try:
                             colors = self.grid[row][col].get_colors()
                             if colors and len(colors) > 0:
-                                self.create_particles(col, row, colors)
+                                # パーティクル数を増やす
+                                self.create_particles(col, row, colors, count=15)
                                 self.logger.debug(f"Created particles for block at ({row}, {col})")
                         except Exception as e:
                             self.logger.warning(f"Particle creation failed for ({row}, {col}): {e}")
@@ -595,14 +930,20 @@ class Match3Game:
                     self.logger.error(f"Invalid coordinates ({row}, {col})")
 
             self.logger.info(f"Successfully removed {removed_count} blocks")
+
+            # ブロック削除後、0.5秒待機してから落下開始
+            self.drop_delay_timer = 0.5
+            self.is_waiting_for_drop = True
+            self.pending_drop = True
+
             return True
 
         except Exception as e:
             self.logger.error(f"Error in remove_matches: {e}", exc_info=True)
             return False
 
-    def drop_blocks(self):
-        """ブロックを落下させる（ログ対応版）"""
+    def drop_blocks(self, animate=True):
+        """ブロックを落下させる（アニメーション対応版）"""
         moved = False
 
         self.logger.debug("Starting block drop process")
@@ -616,17 +957,25 @@ class Match3Game:
                 if self.grid[read_pos][col] is not None:
                     if write_pos != read_pos:
                         # ブロックを移動
-                        block_type = self.grid[read_pos][col].type
+                        block = self.grid[read_pos][col]
+                        block_type = block.type
                         self.logger.debug(
                             f"Moving block {block_type.name} from ({read_pos}, {col}) to ({write_pos}, {col})"
                         )
 
-                        self.grid[write_pos][col] = self.grid[read_pos][col]
+                        self.grid[write_pos][col] = block
                         self.grid[read_pos][col] = None
 
-                        # グリッド座標と描画位置を更新
-                        self.grid[write_pos][col].grid_y = write_pos
-                        self.grid[write_pos][col].draw_y = write_pos * CELL_SIZE
+                        # グリッド座標を更新
+                        block.grid_y = write_pos
+
+                        if animate:
+                            # 落下アニメーションを開始
+                            block.start_animation(AnimationType.FALL, col, write_pos)
+                        else:
+                            # 即座に位置を更新
+                            block.draw_y = write_pos * CELL_SIZE
+
                         moved = True
                         moves_in_column += 1
                     write_pos -= 1
@@ -637,8 +986,8 @@ class Match3Game:
         self.logger.debug(f"Block drop completed. Any moves: {moved}")
         return moved
 
-    def fill_empty_spaces(self):
-        """空いたスペースに新しいブロックを生成（ログ対応版）"""
+    def fill_empty_spaces(self, animate=True):
+        """空いたスペースに新しいブロックを生成（アニメーション対応版）"""
         filled_count = 0
 
         self.logger.debug("Starting to fill empty spaces")
@@ -647,14 +996,160 @@ class Match3Game:
             for row in range(GRID_SIZE):
                 if self.grid[row][col] is None:
                     block_type = random.choice(list(BlockType))
-                    self.grid[row][col] = Block(block_type, col, row, animate_spawn=False)
+                    self.grid[row][col] = Block(block_type, col, row, animate_spawn=animate)
                     filled_count += 1
                     self.logger.debug(f"Created new {block_type.name} block at ({row}, {col})")
 
         self.logger.debug(f"Filled {filled_count} empty spaces")
 
+        # 新しいブロックが生成された場合、アニメーションなしなら即座にマッチチェック
+        if filled_count > 0 and not animate:
+            self.logger.debug("Checking for matches after filling spaces (no animation)")
+            matches = self.find_matches()
+            if matches:
+                self.logger.info(f"Found {len(matches)} matches after filling spaces")
+                self.remove_matches(matches)
+
+    def process_matches_with_highlight(self):
+        """マッチ処理（ハイライト機能付き）"""
+        matches = self.find_matches()
+        if not matches:
+            return False
+
+        # 連鎖時はハイライト表示
+        if hasattr(self, "chain_count") and self.chain_count > 0:
+            self.highlighted_matches = matches
+            self.is_highlighting = True
+            self.match_highlight_timer = 0.5  # 0.5秒間ハイライト
+            return True
+        # 初回マッチは即座に処理
+        return self.remove_matches(matches)
+
+    def update_drop_delay_timer(self, dt):
+        """落下待機タイマーの更新"""
+        if self.is_waiting_for_drop:
+            self.drop_delay_timer -= dt
+            if self.drop_delay_timer <= 0:
+                # 待機終了、落下開始
+                self.is_waiting_for_drop = False
+                if self.pending_drop:
+                    self.pending_drop = False
+                    # ブロック落下と空スペース補充を実行
+                    self.drop_blocks(animate=True)
+                    self.fill_empty_spaces(animate=True)
+
+                    # 落下完了後、新しいマッチがあるかチェック
+                    # アニメーション完了後にチェックするため、フラグを設定
+                    self.pending_cascade_check = True
+                    return True
+        return False
+
+    def update_highlight_timer(self, dt):
+        """ハイライトタイマーの更新"""
+        if self.is_highlighting:
+            self.match_highlight_timer -= dt
+            if self.match_highlight_timer <= 0:
+                # ハイライト終了、マッチを削除
+                self.is_highlighting = False
+                if self.highlighted_matches:
+                    self.remove_matches(self.highlighted_matches)
+                    self.highlighted_matches = []
+                    return True
+        return False
+
+    def process_matches_complete_cycle(self):
+        """マッチ処理の完全なサイクル（テスト用・待機なし）"""
+        total_matches = 0
+        iteration = 0
+
+        try:
+            self.logger.info("Starting complete match processing cycle")
+
+            while True:
+                iteration += 1
+                self.logger.debug(f"Match processing iteration {iteration}")
+
+                # 無限ループ防止
+                if iteration > 10:
+                    self.logger.warning(
+                        f"Breaking match processing due to too many iterations ({iteration})"
+                    )
+                    break
+
+                matches = self.find_matches()
+                if not matches:
+                    self.logger.debug("No more matches found")
+                    break
+
+                self.logger.info(f"Found {len(matches)} matches in iteration {iteration}")
+                total_matches += len(matches)
+
+                # 待機なしで即座に削除
+                if not self._remove_matches_immediate(matches):
+                    self.logger.error("remove_matches failed")
+                    break
+
+                self.logger.debug("Dropping blocks...")
+                self.drop_blocks()
+
+                self.logger.debug("Filling empty spaces...")
+                self.fill_empty_spaces()
+
+            self.logger.info(f"Complete match processing finished. Total matches: {total_matches}")
+            return total_matches > 0
+
+        except Exception as e:
+            self.logger.error(f"Error in process_matches_complete_cycle: {e}", exc_info=True)
+            return False
+
+    def _remove_matches_immediate(self, matches):
+        """マッチしたブロックを即座に削除（待機なし）"""
+        if not matches:
+            return False
+
+        try:
+            self.logger.info(f"Removing {len(matches)} matches immediately: {matches}")
+
+            # スコア計算
+            match_count = len(matches)
+            old_score = self.score
+            score_gained = 0
+
+            if match_count == 3:
+                score_gained = 100
+            elif match_count == 4:
+                score_gained = 200
+            elif match_count == 5:
+                score_gained = 500
+            else:
+                score_gained = 100 * match_count
+
+            self.score += score_gained
+
+            self.logger.info(f"Score updated: {old_score} -> {self.score} (+{score_gained})")
+
+            # 安全にブロックを削除
+            removed_count = 0
+            for row, col in matches:
+                if 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE:
+                    if self.grid[row][col]:
+                        self.logger.debug(f"Removing block at ({row}, {col})")
+                        self.grid[row][col] = None
+                        removed_count += 1
+                    else:
+                        self.logger.warning(f"No block found at ({row}, {col})")
+                else:
+                    self.logger.error(f"Invalid coordinates ({row}, {col})")
+
+            self.logger.info(f"Successfully removed {removed_count} blocks immediately")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error in _remove_matches_immediate: {e}", exc_info=True)
+            return False
+
     def process_matches(self):
-        """マッチ処理の完全なサイクル（ログ対応版）"""
+        """マッチ処理の完全なサイクル（待機機能対応版）"""
         total_matches = 0
         iteration = 0
 
@@ -684,15 +1179,12 @@ class Match3Game:
                     self.logger.error("remove_matches failed")
                     break
 
-                self.logger.debug("Dropping blocks...")
-                self.drop_blocks()
+                # remove_matchesで待機タイマーが設定されるため、
+                # ここでは落下処理を行わない（待機タイマー終了後に自動実行される）
+                self.logger.debug("Waiting for drop delay timer...")
+                break  # 一度に一つのマッチセットのみ処理
 
-                self.logger.debug("Filling empty spaces...")
-                self.fill_empty_spaces()
-
-            self.logger.info(
-                f"Match processing completed. Total matches: {total_matches}, Iterations: {iteration}"
-            )
+            self.logger.info(f"Match processing completed. Total matches: {total_matches}")
             return total_matches > 0
 
         except Exception as e:
@@ -701,6 +1193,11 @@ class Match3Game:
 
     def handle_click(self, mouse_pos):
         """マウスクリックを処理（ログ対応版）"""
+        # アニメーション中は操作を無効化
+        if self.animating:
+            self.logger.debug("Click ignored - animation in progress")
+            return
+
         grid_pos = self.get_grid_position(mouse_pos)
         if not grid_pos:
             self.logger.debug(f"Click outside grid: {mouse_pos}")
@@ -721,16 +1218,11 @@ class Match3Game:
             elif self.are_adjacent(self.selected_block, grid_pos):
                 # 隣接するブロック - 交換を試行
                 self.logger.info(f"Attempting swap: {self.selected_block} <-> {grid_pos}")
-                self.swap_blocks(self.selected_block, grid_pos)
+                self.swap_blocks(self.selected_block, grid_pos, animate=True)
 
-                # マッチをチェックして処理（同期処理）
-                if not self.process_matches():
-                    # マッチしなかった場合は元に戻す
-                    self.logger.info("No matches found, reverting swap")
-                    self.swap_blocks(self.selected_block, grid_pos)
-                else:
-                    self.logger.info("Matches found and processed")
-
+                # アニメーション完了後にマッチ処理を行うため、ここでは処理しない
+                # 代わりにアニメーション完了を待つフラグを設定
+                self.pending_match_check = (self.selected_block, grid_pos)
                 self.selected_block = None
             else:
                 # 隣接しないブロック - 新しい選択
@@ -852,6 +1344,145 @@ class Match3Game:
                     f"Large time change detected: {old_time:.2f} -> {self.time_left:.2f}"
                 )
 
+        # アニメーション更新
+        self._update_animations(dt)
+
+        # エフェクトの更新（ゲームオーバー後も継続）
+        self._update_particles(dt)
+        self._update_score_popups(dt)
+
+        # 定期的なマッチチェック（フォールバック）
+        if not self.game_over and not self.animating:
+            self._periodic_match_check(dt)
+
+    def _update_animations(self, dt: float):
+        """すべてのブロックのアニメーションを更新"""
+        any_animating = False
+
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                if self.grid[row][col] and not self.grid[row][col].update_animation(dt):
+                    any_animating = True
+
+        # アニメーション状態の更新
+        was_animating = self.animating
+        self.animating = any_animating
+
+        # アニメーション完了時の処理
+        if was_animating and not self.animating:
+            self._handle_animation_complete()
+            # 連鎖チェックも実行
+            self.on_animation_complete()
+
+    def _handle_animation_complete(self):
+        """アニメーション完了時の処理"""
+        if self.pending_match_check:
+            pos1, pos2 = self.pending_match_check
+            self.pending_match_check = None
+
+            # マッチをチェックして処理
+            if not self.process_matches():
+                # マッチしなかった場合は元に戻す
+                self.logger.info("No matches found, reverting swap")
+                self.swap_blocks(pos1, pos2, animate=True)
+            else:
+                self.logger.info("Matches found and processed")
+                # 連鎖処理を開始
+                self._start_cascade_processing()
+
+        # 連鎖チェック処理
+        self._handle_cascade_check()
+
+    def _start_cascade_processing(self):
+        """連鎖処理を開始"""
+        # ブロックを落下させる
+        if self.drop_blocks(animate=True):
+            # 空いたスペースを埋める
+            self.fill_empty_spaces(animate=True)
+            # アニメーション完了後に再度マッチチェックが必要
+            self.pending_cascade_check = True
+        else:
+            # 落下がない場合は空いたスペースのみ埋める
+            self.fill_empty_spaces(animate=True)
+
+    def _handle_cascade_check(self):
+        """連鎖チェック処理"""
+        if hasattr(self, "pending_cascade_check") and self.pending_cascade_check:
+            self.logger.debug("Processing pending cascade check")
+            self.pending_cascade_check = False
+            # 新しいマッチがあるかチェック
+            matches = self.find_matches()
+            if matches:
+                self.logger.info(f"Found {len(matches)} matches in cascade check")
+                if self.process_matches():
+                    # 新しいマッチがあれば連鎖を続ける
+                    self.logger.debug("Starting cascade processing")
+                    self._start_cascade_processing()
+                else:
+                    self.logger.debug("No cascade processing needed")
+            else:
+                self.logger.debug("No matches found in cascade check")
+
+    def _force_match_check_if_needed(self):
+        """強制マッチチェック（フォールバック機能）"""
+        # アニメーション検出に失敗した場合の保険として、
+        # 定期的にマッチをチェックして処理する
+        matches = self.find_matches()
+        if matches:
+            self.logger.warning(f"Found {len(matches)} unprocessed matches - forcing processing")
+            self.remove_matches(matches)
+            # 処理後に再度連鎖をチェック
+            self._start_cascade_processing()
+
+    def _periodic_match_check(self, dt):
+        """定期的なマッチチェック（フォールバック機能）"""
+        # 最後のマッチチェックからの経過時間を追跡
+        if not hasattr(self, "_last_match_check_time"):
+            self._last_match_check_time = 0
+
+        self._last_match_check_time += dt
+
+        # 2秒ごとにマッチチェックを実行（フォールバック）
+        if self._last_match_check_time >= 2.0:
+            self._last_match_check_time = 0
+            matches = self.find_matches()
+            if matches:
+                self.logger.warning(f"Periodic check found {len(matches)} unprocessed matches")
+                self.remove_matches(matches)
+                self._start_cascade_processing()
+
+    def _get_time_label(self, time_limit: int) -> str:
+        """時間制限に応じたラベルを取得"""
+        time_labels = {30: "30s", 60: "1min", 180: "3min"}
+        return time_labels.get(time_limit, f"{time_limit}s")
+
+    def _update_score_popups(self, dt):
+        """スコアポップアップの更新"""
+        try:
+            old_count = len(self.score_popups)
+            if old_count > 0:
+                self.logger.info(f"Updating {old_count} score popups with dt={dt:.3f}")
+
+            # 各ポップアップを更新し、生きているものだけを残す
+            updated_popups = []
+            for i, popup in enumerate(self.score_popups):
+                old_life = popup.life
+                still_alive = popup.update(dt)
+                self.logger.info(
+                    f"Popup {i}: life {old_life:.3f} -> {popup.life:.3f}, alive: {still_alive}"
+                )
+                if still_alive:
+                    updated_popups.append(popup)
+
+            self.score_popups = updated_popups
+            new_count = len(self.score_popups)
+
+            if old_count != new_count:
+                self.logger.info(f"Score popups updated: {old_count} -> {new_count}")
+        except Exception as e:
+            self.logger.warning(f"Error updating score popups: {e}")
+            self.score_popups = []
+
     def _update_particles(self, dt: float):
         """パーティクルを更新"""
         try:
@@ -868,18 +1499,41 @@ class Match3Game:
     def _draw_game(self):
         """ゲーム画面を描画"""
         try:
+            self.logger.info(
+                f"Drawing game, menu state: {self.menu.state}, game_over: {self.game_over}"
+            )
+
             if self.menu.state == MenuState.PLAYING:
+                self.logger.info("Drawing PLAYING screen")
                 # ゲーム画面を描画
-                self.screen.fill(COLORS["BLACK"])
+                self.screen.fill(UI_COLORS["BLACK"])
+
+                # 1. グリッドとブロックを描画
                 self.draw_grid()
+
+                # 2. UIを描画
                 self.draw_ui()
 
                 # ゲームオーバー表示
                 if self.game_over:
-                    # メニューシステムがゲームオーバー画面を処理するので、
-                    # ここでは簡単な表示のみ
-                    pass
+                    self.logger.info("Game is over but still in PLAYING state")
+                    # ゲームオーバー時でもUIを表示し続ける
+                    # メニューシステムがゲームオーバー画面を処理
+            elif self.menu.state == MenuState.GAME_OVER:
+                # ゲームオーバー画面でも基本UIを表示
+                self.logger.info("Drawing GAME_OVER screen with UI")
+                self.screen.fill(UI_COLORS["BLACK"])
+
+                # グリッドとブロックを薄く表示
+                self.draw_grid()
+
+                # UIを表示（時間は0:00で固定）
+                self.draw_ui()
+
+                # メニューシステムがゲームオーバー画面を上に描画
+                self.menu.draw()
             else:
+                self.logger.info(f"Drawing menu screen for state: {self.menu.state}")
                 # メニュー画面を描画
                 self.menu.draw()
 
@@ -896,8 +1550,14 @@ class Match3Game:
                 if self.grid[row][col] and not self.grid[row][col].update_animation(dt):
                     any_animating = True
 
-        # パーティクルを更新
-        self.particles = [p for p in self.particles if p.update(dt)]
+        # 落下待機タイマーを更新
+        self.update_drop_delay_timer(dt)
+
+        # ハイライトタイマーを更新
+        if self.update_highlight_timer(dt) and not self.is_waiting_for_drop:
+            # ハイライト終了後の処理（落下待機タイマーが設定されていない場合のみ）
+            self.drop_blocks(animate=True)
+            self.fill_empty_spaces(animate=True)
 
         # アニメーション状態を更新
         was_animating = self.animating
@@ -908,8 +1568,14 @@ class Match3Game:
             self.on_animation_complete()
 
     def on_animation_complete(self):
-        """アニメーション完了時の処理（簡素版）"""
-        # 現在は何もしない（安定性のため）
+        """アニメーション完了時の処理"""
+        self.logger.debug("Animation completed, checking for cascades")
+
+        # 連鎖チェック処理
+        self._handle_cascade_check()
+
+        # フォールバック: 強制マッチチェック（アニメーション検出失敗時の保険）
+        self._force_match_check_if_needed()
 
     def create_particles(self, x, y, colors, count=PARTICLE_COUNT):
         """パーティクルを生成（ログ対応版）"""
