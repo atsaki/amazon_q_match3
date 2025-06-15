@@ -604,21 +604,23 @@ class Match3Game:
         self.screen.blit(score_text, (WINDOW_WIDTH - 200, 20))
 
         # Time remaining display (enhanced with better visibility)
-        minutes = int(self.time_left) // 60
-        seconds = int(self.time_left) % 60
+        # ゲームオーバー時は時間を0に固定
+        display_time = max(0, self.time_left) if not self.game_over else 0
+        minutes = int(display_time) // 60
+        seconds = int(display_time) % 60
 
         # Change color based on time remaining with more dramatic effects
-        if self.time_left > 30:
+        if display_time > 30:
             time_color = UI_COLORS["WHITE"]
             time_bg_color = None
-        elif self.time_left > 10:
+        elif display_time > 10:
             time_color = UI_COLORS["YELLOW"]
             time_bg_color = (64, 64, 0)  # Dark yellow background
         else:
             time_color = UI_COLORS["RED"]
             time_bg_color = (64, 0, 0)  # Dark red background
-            # Add blinking effect for critical time
-            if int(time.time() * 2) % 2:  # Blink every 0.5 seconds
+            # Add blinking effect for critical time (but not when game over)
+            if not self.game_over and int(time.time() * 2) % 2:  # Blink every 0.5 seconds
                 time_color = UI_COLORS["WHITE"]
 
         # Create time text with background for better visibility
@@ -628,7 +630,7 @@ class Match3Game:
         self.logger.debug(f"Drawing time: {time_text} with color {time_color}")
 
         # Draw background for critical time
-        if time_bg_color:
+        if time_bg_color and not self.game_over:  # No background when game over
             time_rect = time_surface.get_rect()
             time_rect.topleft = (WINDOW_WIDTH - 200, 60)
             # Expand background slightly
@@ -666,8 +668,9 @@ class Match3Game:
             (progress_x, progress_y, progress_width, progress_height),
         )
 
-        # Progress fill
-        progress_ratio = self.time_left / self.time_limit
+        # Progress fill (0 when game over)
+        progress_ratio = self.time_left / self.time_limit if not self.game_over else 0
+
         fill_width = int(progress_width * progress_ratio)
 
         # Color based on remaining time
@@ -1406,9 +1409,22 @@ class Match3Game:
 
                 # ゲームオーバー表示
                 if self.game_over:
-                    # メニューシステムがゲームオーバー画面を処理するので、
-                    # ここでは簡単な表示のみ
+                    # ゲームオーバー時でもUIを表示し続ける
+                    # メニューシステムがゲームオーバー画面を処理
                     pass
+            elif self.menu.state == MenuState.GAME_OVER:
+                # ゲームオーバー画面でも基本UIを表示
+                self.logger.debug("Drawing game over screen with UI")
+                self.screen.fill(UI_COLORS["BLACK"])
+
+                # グリッドとブロックを薄く表示
+                self.draw_grid()
+
+                # UIを表示（時間は0:00で固定）
+                self.draw_ui()
+
+                # メニューシステムがゲームオーバー画面を上に描画
+                self.menu.draw()
             else:
                 self.logger.debug("Drawing menu screen")
                 # メニュー画面を描画
