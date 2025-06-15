@@ -587,8 +587,13 @@ class Match3Game:
                         self.screen, draw_x, draw_y, radius, colors, block.alpha
                     )
 
-        # 既存のdraw_gridメソッドはここで終了
-        # パーティクルとスコアポップアップは draw_effects() で描画
+        # パーティクルを描画
+        for particle in self.particles:
+            particle.draw(self.screen)
+
+        # スコアポップアップを描画
+        for popup in self.score_popups:
+            popup.draw(self.screen, self.score_font)
 
     def draw_ui(self):
         """Draw UI elements (Enhanced version with better time display)"""
@@ -1393,14 +1398,11 @@ class Match3Game:
                 # ゲーム画面を描画
                 self.screen.fill(UI_COLORS["BLACK"])
 
-                # 1. グリッドとブロックを描画（スコアポップアップは除く）
-                self.draw_grid_only()
+                # 1. グリッドとブロックを描画
+                self.draw_grid()
 
                 # 2. UIを描画
                 self.draw_ui()
-
-                # 3. エフェクトを最後に描画（UIの上に表示）
-                self.draw_effects()
 
                 # ゲームオーバー表示
                 if self.game_over:
