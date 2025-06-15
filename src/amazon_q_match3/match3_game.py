@@ -401,13 +401,18 @@ class Match3Game:
         self.screen.blit(time_text, (WINDOW_WIDTH - 200, 60))
 
         # Time limit mode display
-        mode_text = self.small_font.render(f"Mode: {self.time_limit}s", True, COLORS["LIGHT_GRAY"])
+        time_label = self._get_time_label(self.time_limit)
+        mode_text = self.small_font.render(f"Mode: {time_label}", True, COLORS["LIGHT_GRAY"])
         self.screen.blit(mode_text, (WINDOW_WIDTH - 200, 100))
 
         # Current best score display
         best_score = self.highscore_manager.get_best_score(self.time_limit)
         if best_score > 0:
-            best_text = self.small_font.render(f"Best: {best_score}", True, COLORS["YELLOW"])
+            # 時間制限に応じた単位表示
+            time_label = self._get_time_label(self.time_limit)
+            best_text = self.small_font.render(
+                f"Best ({time_label}): {best_score}", True, COLORS["YELLOW"]
+            )
             self.screen.blit(best_text, (WINDOW_WIDTH - 200, 120))
 
         # Instructions
@@ -932,6 +937,11 @@ class Match3Game:
             if self.process_matches():
                 # 新しいマッチがあれば連鎖を続ける
                 self._start_cascade_processing()
+
+    def _get_time_label(self, time_limit: int) -> str:
+        """時間制限に応じたラベルを取得"""
+        time_labels = {30: "30s", 60: "1min", 180: "3min"}
+        return time_labels.get(time_limit, f"{time_limit}s")
 
     def _update_particles(self, dt: float):
         """パーティクルを更新"""

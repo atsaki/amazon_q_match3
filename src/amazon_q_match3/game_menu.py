@@ -99,6 +99,11 @@ class GameMenu:
         self.buttons["main_menu"] = pygame.Rect(center_x - 10, 400, 160, 60)
         self.buttons["quit_game"] = pygame.Rect(center_x + 160, 400, 160, 60)
 
+    def _get_time_label(self, time_limit: int) -> str:
+        """時間制限に応じたラベルを取得"""
+        time_labels = {30: "30s", 60: "1min", 180: "3min"}
+        return time_labels.get(time_limit, f"{time_limit}s")
+
     def handle_event(self, event) -> str | None:
         """
         イベントを処理
@@ -284,9 +289,8 @@ class GameMenu:
         self.screen.blit(score_text, score_rect)
 
         # Time limit display
-        time_text = self.text_font.render(
-            f"Time Limit: {self.selected_time}s", True, COLORS["LIGHT_GRAY"]
-        )
+        time_label = self._get_time_label(self.selected_time)
+        time_text = self.text_font.render(f"Mode: {time_label}", True, COLORS["LIGHT_GRAY"])
         time_rect = time_text.get_rect(center=(self.screen.get_width() // 2, 260))
         self.screen.blit(time_text, time_rect)
 
@@ -305,8 +309,9 @@ class GameMenu:
         # Best score display
         best_score = self.highscore_manager.get_best_score(self.selected_time)
         if best_score > 0:
+            time_label = self._get_time_label(self.selected_time)
             best_text = self.small_font.render(
-                f"Mode Best: {best_score}", True, COLORS["LIGHT_GRAY"]
+                f"{time_label} Best: {best_score}", True, COLORS["LIGHT_GRAY"]
             )
             best_rect = best_text.get_rect(center=(self.screen.get_width() // 2, 340))
             self.screen.blit(best_text, best_rect)
