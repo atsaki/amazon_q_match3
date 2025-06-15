@@ -106,7 +106,7 @@ class ScorePopup:
         self.start_y = y
         self.score = score
         self.color = color
-        self.life = 1.0  # 1秒間表示
+        self.life = 0.8  # 0.8秒間表示（1秒より少し短く）
         self.font_size = 24
 
     def update(self, dt):
@@ -114,18 +114,45 @@ class ScorePopup:
         self.life -= dt
         # 上に移動
         self.y = self.start_y - (1.0 - self.life) * 50
+
+        # デバッグ用：ライフが0.1秒以下になったらログ出力
+        if self.life <= 0.1 and self.life > 0:
+            print(f"ScorePopup expiring: life={self.life:.3f}, dt={dt:.3f}")
+
         return self.life > 0
 
     def draw(self, screen, font):
         """ポップアップの描画"""
         if self.life > 0:
-            # スコアテキストを作成
-            score_text = font.render(f"+{self.score}", True, self.color)
+            # フェードアウト効果（残りライフに応じて透明度を調整）
+            alpha = min(255, int(255 * (self.life / 0.8)))  # 0.8秒でフェードアウト
 
-            # 影効果
-            shadow_text = font.render(f"+{self.score}", True, (0, 0, 0))
-            screen.blit(shadow_text, (self.x + 2, self.y + 2))
-            screen.blit(score_text, (self.x, self.y))
+            # 色にアルファ値を適用
+            fade_color = (*self.color[:3], alpha) if len(self.color) == 4 else (*self.color, alpha)
+            shadow_color = (0, 0, 0, alpha // 2)  # 影は半透明
+
+            # スコアテキストを作成
+            score_text = font.render(f"+{self.score}", True, fade_color[:3])
+            shadow_text = font.render(f"+{self.score}", True, shadow_color[:3])
+
+            # 透明度を適用するためのサーフェスを作成
+            if alpha < 255:
+                # 透明度付きサーフェスを作成
+                text_surface = pygame.Surface(score_text.get_size(), pygame.SRCALPHA)
+                shadow_surface = pygame.Surface(shadow_text.get_size(), pygame.SRCALPHA)
+
+                text_surface.blit(score_text, (0, 0))
+                shadow_surface.blit(shadow_text, (0, 0))
+
+                text_surface.set_alpha(alpha)
+                shadow_surface.set_alpha(alpha // 2)
+
+                screen.blit(shadow_surface, (self.x + 2, self.y + 2))
+                screen.blit(text_surface, (self.x, self.y))
+            else:
+                # 通常の描画
+                screen.blit(shadow_text, (self.x + 2, self.y + 2))
+                screen.blit(score_text, (self.x, self.y))
 
 
 class Particle:
@@ -663,7 +690,7 @@ class Match3Game:
         progress_width = 180
         progress_height = 8
         progress_x = WINDOW_WIDTH - 200
-        progress_y = 85
+        progress_y = 140  # 時間表示やベストスコアと重ならないように下に移動
 
         # Background bar
         pygame.draw.rect(
@@ -1377,7 +1404,12 @@ class Match3Game:
     def _update_score_popups(self, dt):
         """スコアポップアップの更新"""
         try:
+            old_count = len(self.score_popups)
             self.score_popups = [popup for popup in self.score_popups if popup.update(dt)]
+            new_count = len(self.score_popups)
+
+            if old_count != new_count:
+                self.logger.debug(f"Score popups updated: {old_count} -> {new_count}")
         except Exception as e:
             self.logger.warning(f"Error updating score popups: {e}")
             self.score_popups = []
