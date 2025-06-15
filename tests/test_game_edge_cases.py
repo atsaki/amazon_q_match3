@@ -15,8 +15,11 @@ class TestGameEdgeCases(unittest.TestCase):
     def setUp(self):
         with patch('pygame.display.set_mode'), \
              patch('pygame.font.Font'), \
-             patch('pygame.display.set_caption'):
+             patch('pygame.display.set_caption'), \
+             patch('pygame.init'):
             self.game = Match3Game()
+            # テスト用にグリッドを空にする
+            self.game.grid = [[None for _ in range(8)] for _ in range(8)]
     
     def test_boundary_coordinates(self):
         """境界座標のテスト"""
@@ -173,8 +176,11 @@ class TestGameStateConsistency(unittest.TestCase):
     def setUp(self):
         with patch('pygame.display.set_mode'), \
              patch('pygame.font.Font'), \
-             patch('pygame.display.set_caption'):
+             patch('pygame.display.set_caption'), \
+             patch('pygame.init'):
             self.game = Match3Game()
+            # テスト用にグリッドを空にする
+            self.game.grid = [[None for _ in range(8)] for _ in range(8)]
     
     def test_grid_consistency_after_operations(self):
         """操作後のグリッド整合性テスト"""

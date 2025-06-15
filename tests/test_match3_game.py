@@ -43,8 +43,11 @@ class TestMatch3Game(unittest.TestCase):
         """各テストの前に実行される初期化"""
         with patch('pygame.display.set_mode'), \
              patch('pygame.font.Font'), \
-             patch('pygame.display.set_caption'):
+             patch('pygame.display.set_caption'), \
+             patch('pygame.init'):
             self.game = Match3Game()
+            # テスト用にグリッドを空にする
+            self.game.grid = [[None for _ in range(8)] for _ in range(8)]
     
     def test_game_initialization(self):
         """ゲーム初期化テスト"""
@@ -52,6 +55,9 @@ class TestMatch3Game(unittest.TestCase):
         self.assertEqual(self.game.time_left, 180)
         self.assertIsNone(self.game.selected_block)
         self.assertFalse(self.game.game_over)
+        
+        # グリッドを初期化してからチェック
+        self.game.initialize_grid()
         
         # グリッドが正しく初期化されているかチェック
         for row in range(8):
@@ -87,6 +93,10 @@ class TestMatch3Game(unittest.TestCase):
     
     def test_swap_blocks(self):
         """ブロック交換テスト"""
+        # テスト用のブロックを設定
+        self.game.grid[0][0] = Block(BlockType.RED, 0, 0)
+        self.game.grid[0][1] = Block(BlockType.BLUE, 1, 0)
+        
         # 初期状態を保存
         block1 = self.game.grid[0][0]
         block2 = self.game.grid[0][1]
@@ -182,7 +192,8 @@ class TestMatch3Game(unittest.TestCase):
     
     def test_drop_blocks(self):
         """ブロック落下テスト"""
-        # 上部にブロック、下部を空にする
+        # グリッドを初期化してから、上部にブロック、下部を空にする
+        self.game.initialize_grid()
         self.game.grid[0][0] = Block(BlockType.RED, 0, 0)
         self.game.grid[1][0] = None
         self.game.grid[2][0] = None
@@ -225,8 +236,11 @@ class TestGameIntegration(unittest.TestCase):
     def setUp(self):
         with patch('pygame.display.set_mode'), \
              patch('pygame.font.Font'), \
-             patch('pygame.display.set_caption'):
+             patch('pygame.display.set_caption'), \
+             patch('pygame.init'):
             self.game = Match3Game()
+            # テスト用にグリッドを空にする
+            self.game.grid = [[None for _ in range(8)] for _ in range(8)]
     
     def test_complete_match_cycle(self):
         """完全なマッチサイクルのテスト"""

@@ -42,6 +42,10 @@ except ImportError:
     )
     logger = logging.getLogger('Match3Game')
 
+# 新しいモジュールをインポート
+from highscore_manager import HighScoreManager
+from game_menu import GameMenu, MenuState
+
 # 初期化
 pygame.init()
 
@@ -250,34 +254,60 @@ class Block:
             screen.blit(surf, (int(gloss_x - gloss_radius), int(gloss_y - gloss_radius)))
 
 class Match3Game:
-    def __init__(self):
+    def __init__(self, time_limit: int = 180):
         self.logger = logging.getLogger('Match3Game')
         self.logger.info("=== Amazon Q Match3 Game Starting ===")
         self.logger.info(f"Pygame version: {pygame.version.ver}")
         
+        # Pygame初期化
+        pygame.init()
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        pygame.display.set_caption("Amazon Q Match3 - Animated Edition")
+        pygame.display.set_caption("Amazon Q Match3 - Enhanced Edition")
         self.clock = pygame.time.Clock()
         
+        # ハイスコア管理とメニューシステム
+        self.highscore_manager = HighScoreManager()
+        self.menu = GameMenu(self.screen, self.highscore_manager)
+        
         # ゲーム状態
-        self.grid = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
-        self.score = 0
-        self.time_left = 180  # 3分 = 180秒
-        self.selected_block = None
-        self.game_over = False
+        self.reset_game(time_limit)
         
         # アニメーション関連
         self.animating = False
         self.particles = []
         self.dt = 0
         
-        # フォント
-        self.font = pygame.font.Font(None, 36)
-        self.big_font = pygame.font.Font(None, 72)
+        # Fonts (English only, optimized sizes)
+        try:
+            # Try system fonts first with better sizes
+            self.font = pygame.font.SysFont('arial,helvetica,sans-serif', 32)
+            self.big_font = pygame.font.SysFont('arial,helvetica,sans-serif', 64)
+            self.small_font = pygame.font.SysFont('arial,helvetica,sans-serif', 18)
+            self.logger.info("System fonts loaded successfully")
+        except:
+            # Fallback to default fonts with better sizes
+            self.font = pygame.font.Font(None, 32)
+            self.big_font = pygame.font.Font(None, 64)
+            self.small_font = pygame.font.Font(None, 18)
+            self.logger.warning("Using default fonts")
         
-        # ゲーム初期化
-        self.initialize_grid()
         self.logger.info("Game initialization completed successfully")
+    
+    def reset_game(self, time_limit: int = 180):
+        """ゲームをリセット"""
+        self.grid = [[None for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.score = 0
+        self.time_limit = time_limit
+        self.time_left = time_limit
+        self.selected_block = None
+        self.game_over = False
+        self.game_started = False
+        
+        # グリッドを初期化（ゲーム開始時のみ）
+        if hasattr(self, 'grid'):
+            self.initialize_grid()
+        
+        self.logger.info(f"Game reset with {time_limit}s time limit")
         
     def initialize_grid(self):
         """グリッドを初期化（マッチしないように配置）"""
@@ -340,20 +370,43 @@ class Match3Game:
             particle.draw(self.screen)
     
     def draw_ui(self):
-        """UI要素を描画"""
-        # スコア表示
+        """Draw UI elements (English version)"""
+        # Score display
         score_text = self.font.render(f"Score: {self.score}", True, COLORS['WHITE'])
         self.screen.blit(score_text, (WINDOW_WIDTH - 200, 20))
         
-        # 残り時間表示
+        # Time remaining display (color-coded)
         minutes = int(self.time_left) // 60
         seconds = int(self.time_left) % 60
-        time_text = self.font.render(f"Time: {minutes:02d}:{seconds:02d}", True, COLORS['WHITE'])
+        
+        # Change color based on time remaining
+        if self.time_left > 30:
+            time_color = COLORS['WHITE']
+        elif self.time_left > 10:
+            time_color = COLORS['YELLOW']
+        else:
+            time_color = COLORS['RED']
+        
+        time_text = self.font.render(f"Time: {minutes:02d}:{seconds:02d}", True, time_color)
         self.screen.blit(time_text, (WINDOW_WIDTH - 200, 60))
         
-        # 操作説明
-        help_text = self.font.render("Click blocks to swap", True, COLORS['WHITE'])
-        self.screen.blit(help_text, (20, WINDOW_HEIGHT - 40))
+        # Time limit mode display
+        mode_text = self.small_font.render(f"Mode: {self.time_limit}s", True, COLORS['LIGHT_GRAY'])
+        self.screen.blit(mode_text, (WINDOW_WIDTH - 200, 100))
+        
+        # Current best score display
+        best_score = self.highscore_manager.get_best_score(self.time_limit)
+        if best_score > 0:
+            best_text = self.small_font.render(f"Best: {best_score}", True, COLORS['YELLOW'])
+            self.screen.blit(best_text, (WINDOW_WIDTH - 200, 120))
+        
+        # Instructions
+        help_text = self.small_font.render("Click blocks to swap", True, COLORS['WHITE'])
+        self.screen.blit(help_text, (20, WINDOW_HEIGHT - 60))
+        
+        # Menu hint
+        menu_hint = self.small_font.render("ESC: Menu", True, COLORS['LIGHT_GRAY'])
+        self.screen.blit(menu_hint, (20, WINDOW_HEIGHT - 40))
     
     def get_grid_position(self, mouse_pos):
         """マウス座標をグリッド座標に変換"""
@@ -658,94 +711,66 @@ class Match3Game:
                 self.logger.debug(f"Selected new block: {grid_pos}")
     
     def run(self):
-        """メインゲームループ（詳細ログ対応版）"""
+        """メインゲームループ（メニュー統合版）"""
         running = True
         frame_count = 0
         last_log_time = 0
         start_time = pygame.time.get_ticks() / 1000.0
         
         try:
-            self.logger.info("Starting main game loop")
-            self.logger.info(f"Initial time left: {self.time_left}s")
+            self.logger.info("Starting main game loop with menu system")
             
             while running:
                 frame_count += 1
-                dt = self.clock.tick(FPS) / 1000.0  # デルタタイム（秒）
+                dt = self.clock.tick(FPS) / 1000.0
                 self.dt = dt
                 
-                # 定期的なステータスログ（5秒ごとに変更）
-                current_time = pygame.time.get_ticks() / 1000.0
-                elapsed_time = current_time - start_time
-                if current_time - last_log_time > 5:
-                    self.logger.info(f"Game status - Frame: {frame_count}, Score: {self.score}, "
-                                   f"Time left: {self.time_left:.1f}s, Elapsed: {elapsed_time:.1f}s, "
-                                   f"Particles: {len(self.particles)}, Game over: {self.game_over}")
-                    last_log_time = current_time
-                
                 # イベント処理
-                quit_received = False
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         self.logger.info("Quit event received")
-                        quit_received = True
                         running = False
-                    elif event.type == pygame.MOUSEBUTTONDOWN:
-                        if not self.game_over:
-                            self.logger.debug(f"Mouse click at {event.pos}")
-                            try:
-                                self.handle_click(event.pos)
-                            except Exception as e:
-                                self.logger.error(f"Error in handle_click: {e}", exc_info=True)
+                    else:
+                        # メニューまたはゲームのイベント処理
+                        if self.menu.state == MenuState.PLAYING:
+                            # ゲーム中のイベント処理
+                            if event.type == pygame.MOUSEBUTTONDOWN and not self.game_over:
+                                self.logger.debug(f"Game mouse click at {event.pos}")
+                                try:
+                                    self.handle_click(event.pos)
+                                except Exception as e:
+                                    self.logger.error(f"Error in handle_click: {e}", exc_info=True)
+                            elif event.type == pygame.KEYDOWN:
+                                if event.key == pygame.K_ESCAPE:
+                                    # ESCキーでメニューに戻る
+                                    self.logger.info("ESC pressed, returning to main menu")
+                                    self.menu.set_state(MenuState.MAIN_MENU)
+                        else:
+                            # メニューのイベント処理
+                            action = self.menu.handle_event(event)
+                            if action:
+                                running = self._handle_menu_action(action)
                 
-                # 強制終了の検出
-                if quit_received:
-                    self.logger.warning("Game loop will exit due to QUIT event")
-                    break
+                # ゲーム更新（プレイ中のみ）
+                if self.menu.state == MenuState.PLAYING and not self.game_over:
+                    self._update_game(dt)
                 
-                # パーティクル更新
-                try:
-                    old_particle_count = len(self.particles)
-                    self.particles = [p for p in self.particles if p.update(dt)]
-                    if old_particle_count != len(self.particles) and old_particle_count > 0:
-                        self.logger.debug(f"Particles updated: {old_particle_count} -> {len(self.particles)}")
-                except Exception as e:
-                    self.logger.warning(f"Error updating particles: {e}")
-                    self.particles = []  # エラー時はパーティクルをクリア
+                # パーティクル更新（常時）
+                self._update_particles(dt)
                 
-                # ゲーム更新
-                if not self.game_over:
-                    old_time = self.time_left
-                    self.time_left -= dt
-                    if self.time_left <= 0:
-                        self.time_left = 0
-                        self.game_over = True
-                        self.logger.info(f"Game over due to time limit - Final score: {self.score}")
-                    
-                    # 時間の大幅な変化をログ
-                    if abs(old_time - self.time_left) > 1.0:
-                        self.logger.warning(f"Large time change detected: {old_time:.2f} -> {self.time_left:.2f}")
+                # 定期ログ（プレイ中のみ）
+                if self.menu.state == MenuState.PLAYING:
+                    current_time = pygame.time.get_ticks() / 1000.0
+                    if current_time - last_log_time > 5:
+                        elapsed_time = current_time - start_time
+                        self.logger.info(f"Game status - Frame: {frame_count}, Score: {self.score}, "
+                                       f"Time left: {self.time_left:.1f}s, Elapsed: {elapsed_time:.1f}s, "
+                                       f"Particles: {len(self.particles)}, Game over: {self.game_over}")
+                        last_log_time = current_time
                 
                 # 描画
-                try:
-                    self.screen.fill(COLORS['BLACK'])
-                    self.draw_grid()
-                    self.draw_ui()
-                    
-                    # ゲームオーバー表示
-                    if self.game_over:
-                        game_over_text = self.big_font.render("GAME OVER", True, COLORS['WHITE'])
-                        text_rect = game_over_text.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
-                        self.screen.blit(game_over_text, text_rect)
-                        
-                        final_score_text = self.font.render(f"Final Score: {self.score}", True, COLORS['WHITE'])
-                        score_rect = final_score_text.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2 + 50))
-                        self.screen.blit(final_score_text, score_rect)
-                    
-                    pygame.display.flip()
-                    
-                except Exception as e:
-                    self.logger.error(f"Error in drawing (frame {frame_count}): {e}", exc_info=True)
-                    # 描画エラーでも続行を試みる
+                self._draw_game()
+                pygame.display.flip()
             
             total_elapsed = (pygame.time.get_ticks() / 1000.0) - start_time
             self.logger.info(f"Game loop ended normally after {frame_count} frames ({total_elapsed:.1f}s elapsed)")
@@ -756,6 +781,73 @@ class Match3Game:
             self.logger.info("Cleaning up and exiting...")
             pygame.quit()
             sys.exit()
+    
+    def _handle_menu_action(self, action: str) -> bool:
+        """メニューアクションを処理"""
+        if action == 'quit':
+            return False
+        elif action == 'start_game':
+            time_limit = self.menu.get_selected_time()
+            self.reset_game(time_limit)
+            self.initialize_grid()
+            self.menu.set_state(MenuState.PLAYING)
+            self.game_started = True
+            self.logger.info(f"Starting new game with {time_limit}s time limit")
+        elif action == 'play_again':
+            # 同じ時間設定でもう一度プレイ
+            pass  # 時間選択画面に戻る
+        elif action == 'main_menu':
+            self.menu.set_state(MenuState.MAIN_MENU)
+        
+        return True
+    
+    def _update_game(self, dt: float):
+        """ゲーム状態を更新"""
+        if not self.game_over:
+            old_time = self.time_left
+            self.time_left -= dt
+            if self.time_left <= 0:
+                self.time_left = 0
+                self.game_over = True
+                self.logger.info(f"Game over due to time limit - Final score: {self.score}")
+                # ゲームオーバー画面に移行
+                self.menu.set_game_over(self.score, self.time_limit)
+            
+            # 時間の大幅な変化をログ
+            if abs(old_time - self.time_left) > 1.0:
+                self.logger.warning(f"Large time change detected: {old_time:.2f} -> {self.time_left:.2f}")
+    
+    def _update_particles(self, dt: float):
+        """パーティクルを更新"""
+        try:
+            old_particle_count = len(self.particles)
+            self.particles = [p for p in self.particles if p.update(dt)]
+            if old_particle_count != len(self.particles) and old_particle_count > 0:
+                self.logger.debug(f"Particles updated: {old_particle_count} -> {len(self.particles)}")
+        except Exception as e:
+            self.logger.warning(f"Error updating particles: {e}")
+            self.particles = []
+    
+    def _draw_game(self):
+        """ゲーム画面を描画"""
+        try:
+            if self.menu.state == MenuState.PLAYING:
+                # ゲーム画面を描画
+                self.screen.fill(COLORS['BLACK'])
+                self.draw_grid()
+                self.draw_ui()
+                
+                # ゲームオーバー表示
+                if self.game_over:
+                    # メニューシステムがゲームオーバー画面を処理するので、
+                    # ここでは簡単な表示のみ
+                    pass
+            else:
+                # メニュー画面を描画
+                self.menu.draw()
+                
+        except Exception as e:
+            self.logger.error(f"Error in drawing: {e}", exc_info=True)
     
     def update_animations(self, dt):
         """アニメーションを更新"""
@@ -813,6 +905,54 @@ class Match3Game:
         except Exception as e:
             self.logger.warning(f"Failed to create particles at ({x}, {y}): {e}")
 
+def main():
+    """Main execution function (complete integration)"""
+    print("=== Amazon Q Match3 Enhanced Edition ===")
+    print("Features:")
+    print("- Time limit selection (30s/1min/3min)")
+    print("- High score recording & display")
+    print("- Game restart functionality")
+    print("- ESC key to return to menu")
+    print("- Comprehensive logging")
+    print("=" * 40)
+    
+    # Initialize logging system (integrated version)
+    try:
+        from logging_config import setup_logging
+        setup_logging(
+            level=logging.INFO,
+            log_to_file=True,
+            log_to_console=False  # Disable console output
+        )
+        logger = logging.getLogger('Match3GameRunner')
+        logger.info("Starting Amazon Q Match3 Enhanced Edition with integrated logging")
+        print("Logging enabled. Detailed logs will be recorded in amazon_q_match3.log")
+    except ImportError:
+        # Fallback when logging config is not available
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('amazon_q_match3.log', encoding='utf-8'),
+            ]
+        )
+        logger = logging.getLogger('Match3GameRunner')
+        logger.info("Starting Amazon Q Match3 (fallback logging)")
+        print("Basic logging enabled.")
+    
+    try:
+        game = Match3Game()
+        game.run()
+        
+    except KeyboardInterrupt:
+        logger.info("Game interrupted by user")
+        print("\nGame terminated.")
+    except Exception as e:
+        logger.error(f"Game crashed: {e}", exc_info=True)
+        print(f"\nGame error occurred: {e}")
+        print("Check the log file (amazon_q_match3.log) for details.")
+    finally:
+        logger.info("Game session ended")
+
 if __name__ == "__main__":
-    game = Match3Game()
-    game.run()
+    main()
