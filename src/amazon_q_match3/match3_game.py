@@ -3,6 +3,7 @@ import logging
 import math
 import random
 import sys
+import time
 from enum import Enum
 from pathlib import Path
 
@@ -61,6 +62,21 @@ COLORS = {
     "WHITE": (255, 255, 255),
     "BLACK": (0, 0, 0),
     "GRAY": (128, 128, 128),
+    "LIGHT_GRAY": (192, 192, 192),
+}
+
+# 単色版（UI用）
+UI_COLORS = {
+    "RED": (255, 100, 100),
+    "BLUE": (100, 150, 255),
+    "GREEN": (100, 255, 100),
+    "YELLOW": (255, 255, 100),
+    "PURPLE": (255, 100, 255),
+    "ORANGE": (255, 165, 0),
+    "WHITE": (255, 255, 255),
+    "BLACK": (0, 0, 0),
+    "GRAY": (128, 128, 128),
+    "LIGHT_GRAY": (192, 192, 192),
 }
 
 
@@ -450,7 +466,7 @@ class Match3Game:
                 y = GRID_OFFSET_Y + row * CELL_SIZE
 
                 # グリッドの枠を描画
-                pygame.draw.rect(self.screen, COLORS["GRAY"], (x, y, CELL_SIZE, CELL_SIZE), 2)
+                pygame.draw.rect(self.screen, UI_COLORS["GRAY"], (x, y, CELL_SIZE, CELL_SIZE), 2)
 
         # ブロックを描画（アニメーション位置で）
         for row in range(GRID_SIZE):
@@ -467,7 +483,7 @@ class Match3Game:
                         highlight_radius = CELL_SIZE // 2 + 4
                         pygame.draw.circle(
                             self.screen,
-                            COLORS["WHITE"],
+                            UI_COLORS["WHITE"],
                             (int(draw_x), int(draw_y)),
                             highlight_radius,
                             3,
@@ -515,29 +531,47 @@ class Match3Game:
             popup.draw(self.screen, self.score_font)
 
     def draw_ui(self):
-        """Draw UI elements (English version)"""
+        """Draw UI elements (Enhanced version with better time display)"""
         # Score display
-        score_text = self.font.render(f"Score: {self.score}", True, COLORS["WHITE"])
+        score_text = self.font.render(f"Score: {self.score}", True, UI_COLORS["WHITE"])
         self.screen.blit(score_text, (WINDOW_WIDTH - 200, 20))
 
-        # Time remaining display (color-coded)
+        # Time remaining display (enhanced with better visibility)
         minutes = int(self.time_left) // 60
         seconds = int(self.time_left) % 60
 
-        # Change color based on time remaining
+        # Change color based on time remaining with more dramatic effects
         if self.time_left > 30:
-            time_color = COLORS["WHITE"]
+            time_color = UI_COLORS["WHITE"]
+            time_bg_color = None
         elif self.time_left > 10:
-            time_color = COLORS["YELLOW"]
+            time_color = UI_COLORS["YELLOW"]
+            time_bg_color = (64, 64, 0)  # Dark yellow background
         else:
-            time_color = COLORS["RED"]
+            time_color = UI_COLORS["RED"]
+            time_bg_color = (64, 0, 0)  # Dark red background
+            # Add blinking effect for critical time
+            if int(time.time() * 2) % 2:  # Blink every 0.5 seconds
+                time_color = UI_COLORS["WHITE"]
 
-        time_text = self.font.render(f"Time: {minutes:02d}:{seconds:02d}", True, time_color)
-        self.screen.blit(time_text, (WINDOW_WIDTH - 200, 60))
+        # Create time text with background for better visibility
+        time_text = f"Time: {minutes:02d}:{seconds:02d}"
+        time_surface = self.font.render(time_text, True, time_color)
+
+        # Draw background for critical time
+        if time_bg_color:
+            time_rect = time_surface.get_rect()
+            time_rect.topleft = (WINDOW_WIDTH - 200, 60)
+            # Expand background slightly
+            bg_rect = time_rect.inflate(10, 4)
+            pygame.draw.rect(self.screen, time_bg_color, bg_rect)
+            pygame.draw.rect(self.screen, time_color, bg_rect, 2)  # Border
+
+        self.screen.blit(time_surface, (WINDOW_WIDTH - 200, 60))
 
         # Time limit mode display
         time_label = self._get_time_label(self.time_limit)
-        mode_text = self.small_font.render(f"Mode: {time_label}", True, COLORS["LIGHT_GRAY"])
+        mode_text = self.small_font.render(f"Mode: {time_label}", True, UI_COLORS["LIGHT_GRAY"])
         self.screen.blit(mode_text, (WINDOW_WIDTH - 200, 100))
 
         # Current best score display
@@ -546,16 +580,46 @@ class Match3Game:
             # 時間制限に応じた単位表示
             time_label = self._get_time_label(self.time_limit)
             best_text = self.small_font.render(
-                f"Best ({time_label}): {best_score}", True, COLORS["YELLOW"]
+                f"Best ({time_label}): {best_score}", True, UI_COLORS["YELLOW"]
             )
             self.screen.blit(best_text, (WINDOW_WIDTH - 200, 120))
 
+        # Progress bar for time remaining (visual indicator)
+        progress_width = 180
+        progress_height = 8
+        progress_x = WINDOW_WIDTH - 200
+        progress_y = 85
+
+        # Background bar
+        pygame.draw.rect(
+            self.screen,
+            UI_COLORS["GRAY"],
+            (progress_x, progress_y, progress_width, progress_height),
+        )
+
+        # Progress fill
+        progress_ratio = self.time_left / self.time_limit
+        fill_width = int(progress_width * progress_ratio)
+
+        # Color based on remaining time
+        if progress_ratio > 0.5:
+            progress_color = UI_COLORS["GREEN"]
+        elif progress_ratio > 0.25:
+            progress_color = UI_COLORS["YELLOW"]
+        else:
+            progress_color = UI_COLORS["RED"]
+
+        if fill_width > 0:
+            pygame.draw.rect(
+                self.screen, progress_color, (progress_x, progress_y, fill_width, progress_height)
+            )
+
         # Instructions
-        help_text = self.small_font.render("Click blocks to swap", True, COLORS["WHITE"])
+        help_text = self.small_font.render("Click blocks to swap", True, UI_COLORS["WHITE"])
         self.screen.blit(help_text, (20, WINDOW_HEIGHT - 60))
 
         # Menu hint
-        menu_hint = self.small_font.render("ESC: Menu", True, COLORS["LIGHT_GRAY"])
+        menu_hint = self.small_font.render("ESC: Menu", True, UI_COLORS["LIGHT_GRAY"])
         self.screen.blit(menu_hint, (20, WINDOW_HEIGHT - 40))
 
     def get_grid_position(self, mouse_pos):
@@ -1260,7 +1324,7 @@ class Match3Game:
         try:
             if self.menu.state == MenuState.PLAYING:
                 # ゲーム画面を描画
-                self.screen.fill(COLORS["BLACK"])
+                self.screen.fill(UI_COLORS["BLACK"])
                 self.draw_grid()
                 self.draw_ui()
 
