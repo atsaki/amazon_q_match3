@@ -263,7 +263,8 @@ class TestGameIntegration(unittest.TestCase):
                     self.game.grid[row][col] = Block(BlockType.BLUE, col, row)
 
         initial_score = self.game.score
-        result = self.game.process_matches()
+        # テスト用の完全サイクル実行メソッドを使用
+        result = self.game.process_matches_complete_cycle()
 
         self.assertTrue(result)
         self.assertGreater(self.game.score, initial_score)

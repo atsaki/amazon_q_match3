@@ -198,7 +198,7 @@ class TestGameStateConsistency(unittest.TestCase):
         self.assert_grid_valid()
 
         # マッチ処理
-        self.game.process_matches()
+        self.game.process_matches_complete_cycle()
         self.assert_grid_valid()
 
     def assert_grid_valid(self):
@@ -231,8 +231,8 @@ class TestGameStateConsistency(unittest.TestCase):
         for col in range(3):
             self.game.grid[4][col] = Block(BlockType.RED, col, 4)
 
-        # process_matchesが終了することを確認
-        result = self.game.process_matches()
+        # process_matches_complete_cycleが終了することを確認
+        result = self.game.process_matches_complete_cycle()
         # 結果に関係なく、処理が完了すればOK
         self.assertIsInstance(result, bool)
 

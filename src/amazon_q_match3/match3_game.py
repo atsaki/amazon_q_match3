@@ -372,6 +372,11 @@ class Match3Game:
         self.highlighted_matches = []
         self.is_highlighting = False
 
+        # ブロック落下前の待機機能
+        self.drop_delay_timer = 0.0
+        self.is_waiting_for_drop = False
+        self.pending_drop = False
+
         # Fonts (English only, optimized sizes)
         try:
             # Try system fonts first with better sizes
@@ -758,6 +763,12 @@ class Match3Game:
                     self.logger.error(f"Invalid coordinates ({row}, {col})")
 
             self.logger.info(f"Successfully removed {removed_count} blocks")
+
+            # ブロック削除後、0.2秒待機してから落下開始
+            self.drop_delay_timer = 0.2
+            self.is_waiting_for_drop = True
+            self.pending_drop = True
+
             return True
 
         except Exception as e:
@@ -839,49 +850,24 @@ class Match3Game:
         # 初回マッチは即座に処理
         return self.remove_matches(matches)
 
-    def process_matches(self):
-        """マッチ処理の完全なサイクル（ログ対応版）"""
-        total_matches = 0
-        iteration = 0
+    def update_drop_delay_timer(self, dt):
+        """落下待機タイマーの更新"""
+        if self.is_waiting_for_drop:
+            self.drop_delay_timer -= dt
+            if self.drop_delay_timer <= 0:
+                # 待機終了、落下開始
+                self.is_waiting_for_drop = False
+                if self.pending_drop:
+                    self.pending_drop = False
+                    # ブロック落下と空スペース補充を実行
+                    self.drop_blocks(animate=True)
+                    self.fill_empty_spaces(animate=True)
 
-        try:
-            self.logger.info("Starting match processing cycle")
-
-            while True:
-                iteration += 1
-                self.logger.debug(f"Match processing iteration {iteration}")
-
-                # 無限ループ防止
-                if iteration > 10:
-                    self.logger.warning(
-                        f"Breaking match processing due to too many iterations ({iteration})"
-                    )
-                    break
-
-                matches = self.find_matches()
-                if not matches:
-                    self.logger.debug("No more matches found")
-                    break
-
-                self.logger.info(f"Found {len(matches)} matches in iteration {iteration}")
-                total_matches += len(matches)
-
-                if not self.remove_matches(matches):
-                    self.logger.error("remove_matches failed")
-                    break
-
-                self.logger.debug("Dropping blocks...")
-                self.drop_blocks()
-
-                self.logger.debug("Filling empty spaces...")
-                self.fill_empty_spaces()
-
-            self.logger.info(f"Match processing completed. Total matches: {total_matches}")
-            return total_matches > 0
-
-        except Exception as e:
-            self.logger.error(f"Error in process_matches: {e}", exc_info=True)
-            return False
+                    # 落下完了後、新しいマッチがあるかチェック
+                    # アニメーション完了後にチェックするため、フラグを設定
+                    self.pending_cascade_check = True
+                    return True
+        return False
 
     def update_highlight_timer(self, dt):
         """ハイライトタイマーの更新"""
@@ -895,7 +881,100 @@ class Match3Game:
                     self.highlighted_matches = []
                     return True
         return False
-        """マッチ処理の完全なサイクル（ログ対応版）"""
+
+    def process_matches_complete_cycle(self):
+        """マッチ処理の完全なサイクル（テスト用・待機なし）"""
+        total_matches = 0
+        iteration = 0
+
+        try:
+            self.logger.info("Starting complete match processing cycle")
+
+            while True:
+                iteration += 1
+                self.logger.debug(f"Match processing iteration {iteration}")
+
+                # 無限ループ防止
+                if iteration > 10:
+                    self.logger.warning(
+                        f"Breaking match processing due to too many iterations ({iteration})"
+                    )
+                    break
+
+                matches = self.find_matches()
+                if not matches:
+                    self.logger.debug("No more matches found")
+                    break
+
+                self.logger.info(f"Found {len(matches)} matches in iteration {iteration}")
+                total_matches += len(matches)
+
+                # 待機なしで即座に削除
+                if not self._remove_matches_immediate(matches):
+                    self.logger.error("remove_matches failed")
+                    break
+
+                self.logger.debug("Dropping blocks...")
+                self.drop_blocks()
+
+                self.logger.debug("Filling empty spaces...")
+                self.fill_empty_spaces()
+
+            self.logger.info(f"Complete match processing finished. Total matches: {total_matches}")
+            return total_matches > 0
+
+        except Exception as e:
+            self.logger.error(f"Error in process_matches_complete_cycle: {e}", exc_info=True)
+            return False
+
+    def _remove_matches_immediate(self, matches):
+        """マッチしたブロックを即座に削除（待機なし）"""
+        if not matches:
+            return False
+
+        try:
+            self.logger.info(f"Removing {len(matches)} matches immediately: {matches}")
+
+            # スコア計算
+            match_count = len(matches)
+            old_score = self.score
+            score_gained = 0
+
+            if match_count == 3:
+                score_gained = 100
+            elif match_count == 4:
+                score_gained = 200
+            elif match_count == 5:
+                score_gained = 500
+            else:
+                score_gained = 100 * match_count
+
+            self.score += score_gained
+
+            self.logger.info(f"Score updated: {old_score} -> {self.score} (+{score_gained})")
+
+            # 安全にブロックを削除
+            removed_count = 0
+            for row, col in matches:
+                if 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE:
+                    if self.grid[row][col]:
+                        self.logger.debug(f"Removing block at ({row}, {col})")
+                        self.grid[row][col] = None
+                        removed_count += 1
+                    else:
+                        self.logger.warning(f"No block found at ({row}, {col})")
+                else:
+                    self.logger.error(f"Invalid coordinates ({row}, {col})")
+
+            self.logger.info(f"Successfully removed {removed_count} blocks immediately")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error in _remove_matches_immediate: {e}", exc_info=True)
+            return False
+
+    def process_matches(self):
+        """マッチ処理の完全なサイクル（待機機能対応版）"""
         total_matches = 0
         iteration = 0
 
@@ -925,15 +1004,12 @@ class Match3Game:
                     self.logger.error("remove_matches failed")
                     break
 
-                self.logger.debug("Dropping blocks...")
-                self.drop_blocks()
+                # remove_matchesで待機タイマーが設定されるため、
+                # ここでは落下処理を行わない（待機タイマー終了後に自動実行される）
+                self.logger.debug("Waiting for drop delay timer...")
+                break  # 一度に一つのマッチセットのみ処理
 
-                self.logger.debug("Filling empty spaces...")
-                self.fill_empty_spaces()
-
-            self.logger.info(
-                f"Match processing completed. Total matches: {total_matches}, Iterations: {iteration}"
-            )
+            self.logger.info(f"Match processing completed. Total matches: {total_matches}")
             return total_matches > 0
 
         except Exception as e:
@@ -1216,9 +1292,12 @@ class Match3Game:
         # スコアポップアップを更新
         self._update_score_popups(dt)
 
+        # 落下待機タイマーを更新
+        self.update_drop_delay_timer(dt)
+
         # ハイライトタイマーを更新
-        if self.update_highlight_timer(dt):
-            # ハイライト終了後の処理
+        if self.update_highlight_timer(dt) and not self.is_waiting_for_drop:
+            # ハイライト終了後の処理（落下待機タイマーが設定されていない場合のみ）
             self.drop_blocks(animate=True)
             self.fill_empty_spaces(animate=True)
 
