@@ -1338,6 +1338,10 @@ class Match3Game:
         # アニメーション更新
         self._update_animations(dt)
 
+        # エフェクトの更新（ゲームオーバー後も継続）
+        self._update_particles(dt)
+        self._update_score_popups(dt)
+
     def _update_animations(self, dt: float):
         """すべてのブロックのアニメーションを更新"""
         any_animating = False
@@ -1493,12 +1497,6 @@ class Match3Game:
             for col in range(GRID_SIZE):
                 if self.grid[row][col] and not self.grid[row][col].update_animation(dt):
                     any_animating = True
-
-        # パーティクルを更新
-        self._update_particles(dt)
-
-        # スコアポップアップを更新
-        self._update_score_popups(dt)
 
         # 落下待機タイマーを更新
         self.update_drop_delay_timer(dt)
