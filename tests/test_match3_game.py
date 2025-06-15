@@ -4,7 +4,7 @@ import os
 from unittest.mock import patch, MagicMock
 
 # テスト対象のモジュールをインポートするためのパス設定
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'q_example'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'amazon_q_match3'))
 
 # pygameの初期化をモック化してテスト環境で実行可能にする
 with patch('pygame.init'), patch('pygame.display.set_mode'), patch('pygame.font.Font'):

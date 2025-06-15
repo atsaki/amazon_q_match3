@@ -4,7 +4,7 @@ import os
 from unittest.mock import patch
 
 # テスト対象のモジュールをインポート
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'q_example'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'amazon_q_match3'))
 
 with patch('pygame.init'), patch('pygame.display.set_mode'), patch('pygame.font.Font'):
     from match3_game import Match3Game, Block, BlockType

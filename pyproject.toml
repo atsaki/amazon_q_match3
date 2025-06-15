@@ -1,7 +1,7 @@
 [project]
-name = "q-example"
+name = "amazon-q-match3"
 version = "0.1.0"
-description = "Add your description here"
+description = "Match3 puzzle game created with Amazon Q Developer"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

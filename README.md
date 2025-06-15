@@ -1,4 +1,4 @@
-# Match3パズルゲーム
+# Amazon Q Match3
 
 Amazon Q Developerを使って作成したPygameベースのMatch3パズルゲームです。
 
@@ -46,7 +46,7 @@ uv sync
 
 ```bash
 # ゲームを起動
-uv run python src/q_example/match3_game.py
+uv run python src/amazon_q_match3/match3_game.py
 ```
 
 ## 🧪 テスト
@@ -63,10 +63,10 @@ uv run pytest tests/
 uv run pytest tests/ -v
 
 # カバレッジ測定付きテスト実行
-uv run pytest tests/ --cov=src/q_example --cov-report=term-missing
+uv run pytest tests/ --cov=src/amazon_q_match3 --cov-report=term-missing
 
 # HTMLカバレッジレポート生成
-uv run pytest tests/ --cov=src/q_example --cov-report=html
+uv run pytest tests/ --cov=src/amazon_q_match3 --cov-report=html
 
 # 特定のテストファイルのみ実行
 uv run pytest tests/test_match3_game.py -v
@@ -107,7 +107,8 @@ uv run pytest tests/test_match3_game.py::TestBlock::test_block_creation -v
 ```
 q_example/
 ├── src/
-│   └── q_example/
+│   └── amazon_q_match3/
+│       ├── __init__.py
 │       └── match3_game.py      # メインゲームファイル
 ├── tests/
 │   ├── __init__.py
@@ -138,7 +139,7 @@ uv add --dev <package-name>
 uv run pytest tests/
 
 # カバレッジチェック
-uv run pytest tests/ --cov=src/q_example --cov-report=term-missing
+uv run pytest tests/ --cov=src/amazon_q_match3 --cov-report=term-missing
 ```
 
 ## 🎯 Amazon Q Developerでの開発体験
