@@ -205,8 +205,9 @@ class GameMenu:
         # Best score display
         best_score, best_mode = self.highscore_manager.get_all_time_best()
         if best_score > 0:
-            # 時間モードを適切なラベルに変換
-            mode_label = self._get_time_label(best_mode)
+            # 時間モードを適切なラベルに変換（文字列を整数に変換）
+            time_limit = int(best_mode)
+            mode_label = self._get_time_label(time_limit)
             best_text = self.small_font.render(
                 f"Best Score: {best_score} ({mode_label})", True, COLORS["YELLOW"]
             )
