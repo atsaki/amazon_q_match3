@@ -764,8 +764,8 @@ class Match3Game:
 
             self.logger.info(f"Successfully removed {removed_count} blocks")
 
-            # ブロック削除後、0.2秒待機してから落下開始
-            self.drop_delay_timer = 0.2
+            # ブロック削除後、0.5秒待機してから落下開始
+            self.drop_delay_timer = 0.5
             self.is_waiting_for_drop = True
             self.pending_drop = True
 
@@ -845,7 +845,7 @@ class Match3Game:
         if hasattr(self, "chain_count") and self.chain_count > 0:
             self.highlighted_matches = matches
             self.is_highlighting = True
-            self.match_highlight_timer = 0.2  # 0.2秒間ハイライト
+            self.match_highlight_timer = 0.5  # 0.5秒間ハイライト
             return True
         # 初回マッチは即座に処理
         return self.remove_matches(matches)
