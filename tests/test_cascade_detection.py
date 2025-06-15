@@ -105,6 +105,11 @@ class TestCascadeDetection(unittest.TestCase):
         # pending_cascade_checkフラグを設定
         self.game.pending_cascade_check = True
 
+        # グリッド全体をクリア
+        for row in range(8):
+            for col in range(8):
+                self.game.grid[row][col] = None
+
         # マッチしない配置を作成
         self.game.grid[0][0] = Block(BlockType.RED, 0, 0)
         self.game.grid[0][1] = Block(BlockType.BLUE, 1, 0)

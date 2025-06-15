@@ -1351,6 +1351,10 @@ class Match3Game:
         self._update_particles(dt)
         self._update_score_popups(dt)
 
+        # 定期的なマッチチェック（フォールバック）
+        if not self.game_over and not self.animating:
+            self._periodic_match_check(dt)
+
     def _update_animations(self, dt: float):
         """すべてのブロックのアニメーションを更新"""
         any_animating = False
@@ -1367,6 +1371,8 @@ class Match3Game:
         # アニメーション完了時の処理
         if was_animating and not self.animating:
             self._handle_animation_complete()
+            # 連鎖チェックも実行
+            self.on_animation_complete()
 
     def _handle_animation_complete(self):
         """アニメーション完了時の処理"""
@@ -1416,6 +1422,34 @@ class Match3Game:
                     self.logger.debug("No cascade processing needed")
             else:
                 self.logger.debug("No matches found in cascade check")
+
+    def _force_match_check_if_needed(self):
+        """強制マッチチェック（フォールバック機能）"""
+        # アニメーション検出に失敗した場合の保険として、
+        # 定期的にマッチをチェックして処理する
+        matches = self.find_matches()
+        if matches:
+            self.logger.warning(f"Found {len(matches)} unprocessed matches - forcing processing")
+            self.remove_matches(matches)
+            # 処理後に再度連鎖をチェック
+            self._start_cascade_processing()
+
+    def _periodic_match_check(self, dt):
+        """定期的なマッチチェック（フォールバック機能）"""
+        # 最後のマッチチェックからの経過時間を追跡
+        if not hasattr(self, "_last_match_check_time"):
+            self._last_match_check_time = 0
+
+        self._last_match_check_time += dt
+
+        # 2秒ごとにマッチチェックを実行（フォールバック）
+        if self._last_match_check_time >= 2.0:
+            self._last_match_check_time = 0
+            matches = self.find_matches()
+            if matches:
+                self.logger.warning(f"Periodic check found {len(matches)} unprocessed matches")
+                self.remove_matches(matches)
+                self._start_cascade_processing()
 
     def _get_time_label(self, time_limit: int) -> str:
         """時間制限に応じたラベルを取得"""
@@ -1539,6 +1573,9 @@ class Match3Game:
 
         # 連鎖チェック処理
         self._handle_cascade_check()
+
+        # フォールバック: 強制マッチチェック（アニメーション検出失敗時の保険）
+        self._force_match_check_if_needed()
 
     def create_particles(self, x, y, colors, count=PARTICLE_COUNT):
         """パーティクルを生成（ログ対応版）"""
