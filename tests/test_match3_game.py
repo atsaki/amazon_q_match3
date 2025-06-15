@@ -17,16 +17,24 @@ class TestBlock(unittest.TestCase):
         """ブロックの作成テスト"""
         block = Block(BlockType.RED, 2, 3)
         self.assertEqual(block.type, BlockType.RED)
-        self.assertEqual(block.x, 2)
-        self.assertEqual(block.y, 3)
-        self.assertFalse(block.falling)
-        self.assertEqual(block.fall_speed, 0)
+        self.assertEqual(block.grid_x, 2)
+        self.assertEqual(block.grid_y, 3)
+        # 描画位置も確認
+        self.assertEqual(block.draw_x, 2 * 60)  # CELL_SIZE = 60
+        self.assertEqual(block.draw_y, 3 * 60)
+        # アニメーション関連の初期値確認
+        self.assertEqual(block.alpha, 255)
     
     def test_get_color(self):
         """色取得テスト"""
         block = Block(BlockType.BLUE, 0, 0)
-        color = block.get_color()
-        self.assertEqual(color, (100, 100, 255))  # BLUE色
+        colors = block.get_colors()
+        # グラデーション色が返されることを確認
+        self.assertIsInstance(colors, (list, tuple))
+        self.assertEqual(len(colors), 2)  # メインカラーとシャドウカラー
+        # 青色系であることを確認
+        main_color = colors[0]
+        self.assertEqual(len(main_color), 3)  # RGB値
 
 class TestMatch3Game(unittest.TestCase):
     """Match3Gameクラスのテスト"""
@@ -91,10 +99,16 @@ class TestMatch3Game(unittest.TestCase):
         self.assertEqual(self.game.grid[0][1], block1)
         
         # 座標が更新されているかチェック
-        self.assertEqual(self.game.grid[0][0].x, 0)
-        self.assertEqual(self.game.grid[0][0].y, 0)
-        self.assertEqual(self.game.grid[0][1].x, 1)
-        self.assertEqual(self.game.grid[0][1].y, 0)
+        self.assertEqual(self.game.grid[0][0].grid_x, 0)
+        self.assertEqual(self.game.grid[0][0].grid_y, 0)
+        self.assertEqual(self.game.grid[0][1].grid_x, 1)
+        self.assertEqual(self.game.grid[0][1].grid_y, 0)
+        
+        # 描画位置も更新されているかチェック
+        self.assertEqual(self.game.grid[0][0].draw_x, 0 * 60)
+        self.assertEqual(self.game.grid[0][0].draw_y, 0 * 60)
+        self.assertEqual(self.game.grid[0][1].draw_x, 1 * 60)
+        self.assertEqual(self.game.grid[0][1].draw_y, 0 * 60)
     
     def test_find_matches_horizontal(self):
         """横方向のマッチ検出テスト"""
@@ -180,7 +194,8 @@ class TestMatch3Game(unittest.TestCase):
         self.assertIsNone(self.game.grid[1][0])
         self.assertIsNotNone(self.game.grid[2][0])
         self.assertEqual(self.game.grid[2][0].type, BlockType.RED)
-        self.assertEqual(self.game.grid[2][0].y, 2)  # 座標が更新されている
+        self.assertEqual(self.game.grid[2][0].grid_y, 2)  # 座標が更新されている
+        self.assertEqual(self.game.grid[2][0].draw_y, 2 * 60)  # 描画位置も更新
     
     def test_fill_empty_spaces(self):
         """空スペース補充テスト"""
@@ -197,8 +212,12 @@ class TestMatch3Game(unittest.TestCase):
         self.assertIsNotNone(self.game.grid[2][2])
         
         # 新しいブロックが正しい座標を持っているかチェック
-        self.assertEqual(self.game.grid[0][0].x, 0)
-        self.assertEqual(self.game.grid[0][0].y, 0)
+        self.assertEqual(self.game.grid[0][0].grid_x, 0)
+        self.assertEqual(self.game.grid[0][0].grid_y, 0)
+        self.assertEqual(self.game.grid[1][1].grid_x, 1)
+        self.assertEqual(self.game.grid[1][1].grid_y, 1)
+        self.assertEqual(self.game.grid[2][2].grid_x, 2)
+        self.assertEqual(self.game.grid[2][2].grid_y, 2)
 
 class TestGameIntegration(unittest.TestCase):
     """統合テスト"""

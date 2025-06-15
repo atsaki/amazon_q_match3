@@ -196,10 +196,13 @@ class TestGameStateConsistency(unittest.TestCase):
                 block = self.game.grid[row][col]
                 if block is not None:
                     # ブロックの座標が正しいかチェック
-                    self.assertEqual(block.x, col)
-                    self.assertEqual(block.y, row)
+                    self.assertEqual(block.grid_x, col)
+                    self.assertEqual(block.grid_y, row)
                     # ブロックタイプが有効かチェック
                     self.assertIsInstance(block.type, BlockType)
+                    # 描画位置も確認
+                    self.assertEqual(block.draw_x, col * 60)
+                    self.assertEqual(block.draw_y, row * 60)
     
     def test_no_infinite_loops(self):
         """無限ループが発生しないかテスト"""
