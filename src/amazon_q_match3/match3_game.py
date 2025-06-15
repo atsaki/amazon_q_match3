@@ -115,10 +115,6 @@ class ScorePopup:
         # 上に移動
         self.y = self.start_y - (1.0 - self.life) * 50
 
-        # デバッグ用：ライフが0.1秒以下になったらログ出力
-        if self.life <= 0.1 and self.life > 0:
-            print(f"ScorePopup expiring: life={self.life:.3f}, dt={dt:.3f}")
-
         return self.life > 0
 
     def draw(self, screen, font):
@@ -903,6 +899,9 @@ class Match3Game:
             # スコアポップアップを作成
             score_popup = ScorePopup(screen_x, screen_y, score_gained)
             self.score_popups.append(score_popup)
+            self.logger.info(
+                f"Created score popup: +{score_gained} at ({screen_x}, {screen_y}), total popups: {len(self.score_popups)}"
+            )
 
             # 安全にブロックを削除
             removed_count = 0
@@ -1405,11 +1404,25 @@ class Match3Game:
         """スコアポップアップの更新"""
         try:
             old_count = len(self.score_popups)
-            self.score_popups = [popup for popup in self.score_popups if popup.update(dt)]
+            if old_count > 0:
+                self.logger.info(f"Updating {old_count} score popups with dt={dt:.3f}")
+
+            # 各ポップアップを更新し、生きているものだけを残す
+            updated_popups = []
+            for i, popup in enumerate(self.score_popups):
+                old_life = popup.life
+                still_alive = popup.update(dt)
+                self.logger.info(
+                    f"Popup {i}: life {old_life:.3f} -> {popup.life:.3f}, alive: {still_alive}"
+                )
+                if still_alive:
+                    updated_popups.append(popup)
+
+            self.score_popups = updated_popups
             new_count = len(self.score_popups)
 
             if old_count != new_count:
-                self.logger.debug(f"Score popups updated: {old_count} -> {new_count}")
+                self.logger.info(f"Score popups updated: {old_count} -> {new_count}")
         except Exception as e:
             self.logger.warning(f"Error updating score popups: {e}")
             self.score_popups = []
