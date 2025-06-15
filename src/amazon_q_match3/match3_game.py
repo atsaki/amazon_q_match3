@@ -457,8 +457,73 @@ class Match3Game:
                 block_type = random.choice(valid_types)
                 self.grid[row][col] = Block(block_type, col, row)
 
+    def draw_grid_only(self):
+        """グリッドとブロックのみを描画（エフェクトは除く）"""
+        self.logger.debug("Drawing grid only")
+
+        # グリッドの背景を描画
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                x = GRID_OFFSET_X + col * CELL_SIZE
+                y = GRID_OFFSET_Y + row * CELL_SIZE
+
+                # グリッドの枠を描画
+                pygame.draw.rect(self.screen, UI_COLORS["GRAY"], (x, y, CELL_SIZE, CELL_SIZE), 2)
+
+        # ブロックを描画
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                if self.grid[row][col]:
+                    self.grid[row][col].draw(self.screen)
+
+        # 選択されたブロックのハイライト
+        if self.selected_block:
+            row, col = self.selected_block
+            x = GRID_OFFSET_X + col * CELL_SIZE
+            y = GRID_OFFSET_Y + row * CELL_SIZE
+            pygame.draw.rect(self.screen, UI_COLORS["WHITE"], (x, y, CELL_SIZE, CELL_SIZE), 4)
+
+        # 連鎖ハイライト（黄色の点滅）
+        if self.is_highlighting and self.highlighted_matches:
+            for row, col in self.highlighted_matches:
+                x = GRID_OFFSET_X + col * CELL_SIZE + CELL_SIZE // 2
+                y = GRID_OFFSET_Y + row * CELL_SIZE + CELL_SIZE // 2
+
+                # 点滅効果
+                alpha = int(128 + 127 * abs(math.sin(pygame.time.get_ticks() * 0.01)))
+                highlight_radius = CELL_SIZE // 3
+
+                # 黄色の円でハイライト
+                if alpha > 100:  # 一定の透明度以上の時のみ描画
+                    try:
+                        draw_x = x
+                        draw_y = y
+                        pygame.draw.circle(
+                            self.screen,
+                            UI_COLORS["WHITE"],
+                            (int(draw_x), int(draw_y)),
+                            highlight_radius,
+                            3,
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Error drawing highlight at ({row}, {col}): {e}")
+
+    def draw_effects(self):
+        """エフェクト（パーティクル、スコアポップアップ）を描画"""
+        self.logger.debug("Drawing effects")
+
+        # パーティクルを描画
+        for particle in self.particles:
+            particle.draw(self.screen)
+
+        # スコアポップアップを描画
+        for popup in self.score_popups:
+            popup.draw(self.screen, self.score_font)
+
     def draw_grid(self):
         """グリッドとブロックを描画（アニメーション対応）"""
+        self.logger.debug("Drawing grid")
+
         # グリッドの背景を描画
         for row in range(GRID_SIZE):
             for col in range(GRID_SIZE):
@@ -522,16 +587,13 @@ class Match3Game:
                         self.screen, draw_x, draw_y, radius, colors, block.alpha
                     )
 
-        # パーティクルを描画
-        for particle in self.particles:
-            particle.draw(self.screen)
-
-        # スコアポップアップを描画
-        for popup in self.score_popups:
-            popup.draw(self.screen, self.score_font)
+        # 既存のdraw_gridメソッドはここで終了
+        # パーティクルとスコアポップアップは draw_effects() で描画
 
     def draw_ui(self):
         """Draw UI elements (Enhanced version with better time display)"""
+        self.logger.debug("Drawing UI elements")
+
         # Score display
         score_text = self.font.render(f"Score: {self.score}", True, UI_COLORS["WHITE"])
         self.screen.blit(score_text, (WINDOW_WIDTH - 200, 20))
@@ -557,6 +619,8 @@ class Match3Game:
         # Create time text with background for better visibility
         time_text = f"Time: {minutes:02d}:{seconds:02d}"
         time_surface = self.font.render(time_text, True, time_color)
+
+        self.logger.debug(f"Drawing time: {time_text} with color {time_color}")
 
         # Draw background for critical time
         if time_bg_color:
@@ -1322,11 +1386,21 @@ class Match3Game:
     def _draw_game(self):
         """ゲーム画面を描画"""
         try:
+            self.logger.debug(f"Drawing game, menu state: {self.menu.state}")
+
             if self.menu.state == MenuState.PLAYING:
+                self.logger.debug("Drawing game screen")
                 # ゲーム画面を描画
                 self.screen.fill(UI_COLORS["BLACK"])
-                self.draw_grid()
+
+                # 1. グリッドとブロックを描画（スコアポップアップは除く）
+                self.draw_grid_only()
+
+                # 2. UIを描画
                 self.draw_ui()
+
+                # 3. エフェクトを最後に描画（UIの上に表示）
+                self.draw_effects()
 
                 # ゲームオーバー表示
                 if self.game_over:
@@ -1334,6 +1408,7 @@ class Match3Game:
                     # ここでは簡単な表示のみ
                     pass
             else:
+                self.logger.debug("Drawing menu screen")
                 # メニュー画面を描画
                 self.menu.draw()
 
