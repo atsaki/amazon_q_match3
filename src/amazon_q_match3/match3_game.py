@@ -106,14 +106,14 @@ class ScorePopup:
         self.start_y = y
         self.score = score
         self.color = color
-        self.life = 0.8  # 0.8秒間表示（1秒より少し短く）
-        self.font_size = 24
+        self.life = 2.0  # 2秒間表示
+        self.font_size = 36  # 24 * 1.5 = 36
 
     def update(self, dt):
         """ポップアップの更新"""
         self.life -= dt
-        # 上に移動
-        self.y = self.start_y - (1.0 - self.life) * 50
+        # 上に移動（2秒間でより高く上昇）
+        self.y = self.start_y - (1.0 - self.life / 2.0) * 80  # 2秒で80ピクセル上昇
 
         return self.life > 0
 
@@ -121,15 +121,16 @@ class ScorePopup:
         """ポップアップの描画"""
         if self.life > 0:
             # フェードアウト効果（残りライフに応じて透明度を調整）
-            alpha = min(255, int(255 * (self.life / 0.8)))  # 0.8秒でフェードアウト
+            alpha = min(255, int(255 * (self.life / 2.0)))  # 2秒でフェードアウト
 
             # 色にアルファ値を適用
             fade_color = (*self.color[:3], alpha) if len(self.color) == 4 else (*self.color, alpha)
             shadow_color = (0, 0, 0, alpha // 2)  # 影は半透明
 
-            # スコアテキストを作成
-            score_text = font.render(f"+{self.score}", True, fade_color[:3])
-            shadow_text = font.render(f"+{self.score}", True, shadow_color[:3])
+            # より大きなフォントでスコアテキストを作成
+            large_font = pygame.font.Font(None, self.font_size)
+            score_text = large_font.render(f"+{self.score}", True, fade_color[:3])
+            shadow_text = large_font.render(f"+{self.score}", True, shadow_color[:3])
 
             # 透明度を適用するためのサーフェスを作成
             if alpha < 255:
