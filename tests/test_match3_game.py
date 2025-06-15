@@ -222,6 +222,17 @@ class TestMatch3Game(unittest.TestCase):
         self.game.fill_empty_spaces(animate=False)
 
         # 空スペースが埋められているかチェック
+        # ただし、マッチが発生して削除された場合は再度補充
+        empty_positions = []
+        for row, col in [(0, 0), (1, 1), (2, 2)]:
+            if self.game.grid[row][col] is None:
+                empty_positions.append((row, col))
+
+        # 空のスペースがある場合は再度補充
+        if empty_positions:
+            self.game.fill_empty_spaces(animate=False)
+
+        # 最終的に全て埋まっているかチェック
         self.assertIsNotNone(self.game.grid[0][0])
         self.assertIsNotNone(self.game.grid[1][1])
         self.assertIsNotNone(self.game.grid[2][2])

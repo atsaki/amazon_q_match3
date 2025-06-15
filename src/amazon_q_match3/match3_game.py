@@ -1002,6 +1002,14 @@ class Match3Game:
 
         self.logger.debug(f"Filled {filled_count} empty spaces")
 
+        # 新しいブロックが生成された場合、アニメーションなしなら即座にマッチチェック
+        if filled_count > 0 and not animate:
+            self.logger.debug("Checking for matches after filling spaces (no animation)")
+            matches = self.find_matches()
+            if matches:
+                self.logger.info(f"Found {len(matches)} matches after filling spaces")
+                self.remove_matches(matches)
+
     def process_matches_with_highlight(self):
         """マッチ処理（ハイライト機能付き）"""
         matches = self.find_matches()
@@ -1394,11 +1402,20 @@ class Match3Game:
     def _handle_cascade_check(self):
         """連鎖チェック処理"""
         if hasattr(self, "pending_cascade_check") and self.pending_cascade_check:
+            self.logger.debug("Processing pending cascade check")
             self.pending_cascade_check = False
             # 新しいマッチがあるかチェック
-            if self.process_matches():
-                # 新しいマッチがあれば連鎖を続ける
-                self._start_cascade_processing()
+            matches = self.find_matches()
+            if matches:
+                self.logger.info(f"Found {len(matches)} matches in cascade check")
+                if self.process_matches():
+                    # 新しいマッチがあれば連鎖を続ける
+                    self.logger.debug("Starting cascade processing")
+                    self._start_cascade_processing()
+                else:
+                    self.logger.debug("No cascade processing needed")
+            else:
+                self.logger.debug("No matches found in cascade check")
 
     def _get_time_label(self, time_limit: int) -> str:
         """時間制限に応じたラベルを取得"""
@@ -1517,8 +1534,11 @@ class Match3Game:
             self.on_animation_complete()
 
     def on_animation_complete(self):
-        """アニメーション完了時の処理（簡素版）"""
-        # 現在は何もしない（安定性のため）
+        """アニメーション完了時の処理"""
+        self.logger.debug("Animation completed, checking for cascades")
+
+        # 連鎖チェック処理
+        self._handle_cascade_check()
 
     def create_particles(self, x, y, colors, count=PARTICLE_COUNT):
         """パーティクルを生成（ログ対応版）"""
