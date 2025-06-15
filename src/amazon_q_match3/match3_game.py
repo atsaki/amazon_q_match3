@@ -518,7 +518,9 @@ class Match3Game:
 
         # スコアポップアップを描画
         for popup in self.score_popups:
-            popup.draw(self.screen, self.score_font)
+            # score_fontの存在チェック
+            font_to_use = getattr(self, "score_font", self.small_font)
+            popup.draw(self.screen, font_to_use)
 
     def draw_grid(self):
         """グリッドとブロックを描画（アニメーション対応）"""
@@ -593,11 +595,13 @@ class Match3Game:
 
         # スコアポップアップを描画
         for popup in self.score_popups:
-            popup.draw(self.screen, self.score_font)
+            # score_fontの存在チェック
+            font_to_use = getattr(self, "score_font", self.small_font)
+            popup.draw(self.screen, font_to_use)
 
     def draw_ui(self):
         """Draw UI elements (Enhanced version with better time display)"""
-        self.logger.debug("Drawing UI elements")
+        self.logger.info(f"Drawing UI elements - Score: {self.score}, Time: {self.time_left:.1f}")
 
         # Score display
         score_text = self.font.render(f"Score: {self.score}", True, UI_COLORS["WHITE"])
@@ -1394,10 +1398,12 @@ class Match3Game:
     def _draw_game(self):
         """ゲーム画面を描画"""
         try:
-            self.logger.debug(f"Drawing game, menu state: {self.menu.state}")
+            self.logger.info(
+                f"Drawing game, menu state: {self.menu.state}, game_over: {self.game_over}"
+            )
 
             if self.menu.state == MenuState.PLAYING:
-                self.logger.debug("Drawing game screen")
+                self.logger.info("Drawing PLAYING screen")
                 # ゲーム画面を描画
                 self.screen.fill(UI_COLORS["BLACK"])
 
@@ -1409,12 +1415,12 @@ class Match3Game:
 
                 # ゲームオーバー表示
                 if self.game_over:
+                    self.logger.info("Game is over but still in PLAYING state")
                     # ゲームオーバー時でもUIを表示し続ける
                     # メニューシステムがゲームオーバー画面を処理
-                    pass
             elif self.menu.state == MenuState.GAME_OVER:
                 # ゲームオーバー画面でも基本UIを表示
-                self.logger.debug("Drawing game over screen with UI")
+                self.logger.info("Drawing GAME_OVER screen with UI")
                 self.screen.fill(UI_COLORS["BLACK"])
 
                 # グリッドとブロックを薄く表示
@@ -1426,7 +1432,7 @@ class Match3Game:
                 # メニューシステムがゲームオーバー画面を上に描画
                 self.menu.draw()
             else:
-                self.logger.debug("Drawing menu screen")
+                self.logger.info(f"Drawing menu screen for state: {self.menu.state}")
                 # メニュー画面を描画
                 self.menu.draw()
 
