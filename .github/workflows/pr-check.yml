@@ -1,0 +1,90 @@
+name: PR Quality Check
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.13
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Run Ruff Linter
+      run: |
+        echo "🔍 Running Ruff Linter..."
+        uv run ruff check . --output-format=github
+
+    - name: Run Ruff Formatter Check
+      run: |
+        echo "🎨 Checking code formatting..."
+        uv run ruff format --check .
+
+    - name: Run Tests
+      run: |
+        echo "🧪 Running test suite..."
+        uv run pytest tests/ -v --tb=short
+
+    - name: Run Tests with Coverage
+      run: |
+        echo "📊 Running tests with coverage..."
+        uv run pytest tests/ --cov=src/amazon_q_match3 --cov-report=term-missing --cov-report=xml
+
+    - name: Comment PR with Coverage
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+
+          // Read coverage report if it exists
+          let coverageComment = '## 📊 Test Coverage Report\n\n';
+
+          try {
+            // This is a simple approach - in a real scenario you might want to parse the XML
+            coverageComment += '✅ Coverage report generated successfully\n';
+            coverageComment += '📈 Check the logs above for detailed coverage information\n\n';
+          } catch (error) {
+            coverageComment += '❌ Could not generate coverage report\n\n';
+          }
+
+          coverageComment += '## 🔍 Quality Checks\n\n';
+          coverageComment += '- ✅ Ruff Linter\n';
+          coverageComment += '- ✅ Ruff Formatter\n';
+          coverageComment += '- ✅ pytest Test Suite\n';
+          coverageComment += '- ✅ Coverage Analysis\n\n';
+          coverageComment += '🎉 All quality checks passed!';
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: coverageComment
+          });
+
+    - name: Set PR Status
+      if: success()
+      run: |
+        echo "✅ All quality checks passed!"
+        echo "PR is ready for review 🚀"
+
+    - name: Fail on Quality Issues
+      if: failure()
+      run: |
+        echo "❌ Quality checks failed!"
+        echo "Please fix the issues before merging."
+        exit 1
