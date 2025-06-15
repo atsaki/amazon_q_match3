@@ -5,6 +5,11 @@ on:
     branches: [ main ]
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   quality-check:
     runs-on: ubuntu-latest
@@ -49,25 +54,19 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
-          const fs = require('fs');
+          const coverageComment = `## 📊 Test Coverage Report
 
-          // Read coverage report if it exists
-          let coverageComment = '## 📊 Test Coverage Report\n\n';
+          ✅ Coverage report generated successfully
+          📈 Check the logs above for detailed coverage information
 
-          try {
-            // This is a simple approach - in a real scenario you might want to parse the XML
-            coverageComment += '✅ Coverage report generated successfully\n';
-            coverageComment += '📈 Check the logs above for detailed coverage information\n\n';
-          } catch (error) {
-            coverageComment += '❌ Could not generate coverage report\n\n';
-          }
+          ## 🔍 Quality Checks
 
-          coverageComment += '## 🔍 Quality Checks\n\n';
-          coverageComment += '- ✅ Ruff Linter\n';
-          coverageComment += '- ✅ Ruff Formatter\n';
-          coverageComment += '- ✅ pytest Test Suite\n';
-          coverageComment += '- ✅ Coverage Analysis\n\n';
-          coverageComment += '🎉 All quality checks passed!';
+          - ✅ Ruff Linter
+          - ✅ Ruff Formatter
+          - ✅ pytest Test Suite
+          - ✅ Coverage Analysis
+
+          🎉 All quality checks passed!`;
 
           github.rest.issues.createComment({
             issue_number: context.issue.number,
@@ -81,10 +80,3 @@ jobs:
       run: |
         echo "✅ All quality checks passed!"
         echo "PR is ready for review 🚀"
-
-    - name: Fail on Quality Issues
-      if: failure()
-      run: |
-        echo "❌ Quality checks failed!"
-        echo "Please fix the issues before merging."
-        exit 1
