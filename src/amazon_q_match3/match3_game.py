@@ -298,6 +298,7 @@ class Match3Game:
         self.selected_block = None
         self.game_over = False
         self.game_started = False
+        self.pending_match_check = None
 
         # グリッドを初期化（ゲーム開始時のみ）
         if hasattr(self, "grid"):
@@ -433,23 +434,35 @@ class Match3Game:
         row2, col2 = pos2
         return abs(row1 - row2) + abs(col1 - col2) == 1
 
-    def swap_blocks(self, pos1, pos2):
-        """ブロックを交換（簡素版）"""
+    def swap_blocks(self, pos1, pos2, animate=True):
+        """ブロックを交換（アニメーション対応版）"""
         row1, col1 = pos1
         row2, col2 = pos2
 
+        block1 = self.grid[row1][col1]
+        block2 = self.grid[row2][col2]
+
+        if not block1 or not block2:
+            return
+
         # ブロックを交換
-        self.grid[row1][col1], self.grid[row2][col2] = self.grid[row2][col2], self.grid[row1][col1]
+        self.grid[row1][col1], self.grid[row2][col2] = block2, block1
 
         # グリッド座標を更新
-        if self.grid[row1][col1]:
-            self.grid[row1][col1].grid_x, self.grid[row1][col1].grid_y = col1, row1
-            self.grid[row1][col1].draw_x = col1 * CELL_SIZE
-            self.grid[row1][col1].draw_y = row1 * CELL_SIZE
-        if self.grid[row2][col2]:
-            self.grid[row2][col2].grid_x, self.grid[row2][col2].grid_y = col2, row2
-            self.grid[row2][col2].draw_x = col2 * CELL_SIZE
-            self.grid[row2][col2].draw_y = row2 * CELL_SIZE
+        block1.grid_x, block1.grid_y = col2, row2
+        block2.grid_x, block2.grid_y = col1, row1
+
+        if animate:
+            # アニメーションを開始
+            block1.start_animation(AnimationType.SWAP, col2, row2)
+            block2.start_animation(AnimationType.SWAP, col1, row1)
+            self.logger.debug(f"Started swap animation: ({row1},{col1}) <-> ({row2},{col2})")
+        else:
+            # 即座に位置を更新
+            block1.draw_x = col2 * CELL_SIZE
+            block1.draw_y = row2 * CELL_SIZE
+            block2.draw_x = col1 * CELL_SIZE
+            block2.draw_y = row1 * CELL_SIZE
 
     def find_matches(self):
         """マッチするブロックを検出（ログ対応版）"""
@@ -601,8 +614,8 @@ class Match3Game:
             self.logger.error(f"Error in remove_matches: {e}", exc_info=True)
             return False
 
-    def drop_blocks(self):
-        """ブロックを落下させる（ログ対応版）"""
+    def drop_blocks(self, animate=True):
+        """ブロックを落下させる（アニメーション対応版）"""
         moved = False
 
         self.logger.debug("Starting block drop process")
@@ -616,17 +629,25 @@ class Match3Game:
                 if self.grid[read_pos][col] is not None:
                     if write_pos != read_pos:
                         # ブロックを移動
-                        block_type = self.grid[read_pos][col].type
+                        block = self.grid[read_pos][col]
+                        block_type = block.type
                         self.logger.debug(
                             f"Moving block {block_type.name} from ({read_pos}, {col}) to ({write_pos}, {col})"
                         )
 
-                        self.grid[write_pos][col] = self.grid[read_pos][col]
+                        self.grid[write_pos][col] = block
                         self.grid[read_pos][col] = None
 
-                        # グリッド座標と描画位置を更新
-                        self.grid[write_pos][col].grid_y = write_pos
-                        self.grid[write_pos][col].draw_y = write_pos * CELL_SIZE
+                        # グリッド座標を更新
+                        block.grid_y = write_pos
+
+                        if animate:
+                            # 落下アニメーションを開始
+                            block.start_animation(AnimationType.FALL, col, write_pos)
+                        else:
+                            # 即座に位置を更新
+                            block.draw_y = write_pos * CELL_SIZE
+
                         moved = True
                         moves_in_column += 1
                     write_pos -= 1
@@ -637,8 +658,8 @@ class Match3Game:
         self.logger.debug(f"Block drop completed. Any moves: {moved}")
         return moved
 
-    def fill_empty_spaces(self):
-        """空いたスペースに新しいブロックを生成（ログ対応版）"""
+    def fill_empty_spaces(self, animate=True):
+        """空いたスペースに新しいブロックを生成（アニメーション対応版）"""
         filled_count = 0
 
         self.logger.debug("Starting to fill empty spaces")
@@ -647,7 +668,7 @@ class Match3Game:
             for row in range(GRID_SIZE):
                 if self.grid[row][col] is None:
                     block_type = random.choice(list(BlockType))
-                    self.grid[row][col] = Block(block_type, col, row, animate_spawn=False)
+                    self.grid[row][col] = Block(block_type, col, row, animate_spawn=animate)
                     filled_count += 1
                     self.logger.debug(f"Created new {block_type.name} block at ({row}, {col})")
 
@@ -701,6 +722,11 @@ class Match3Game:
 
     def handle_click(self, mouse_pos):
         """マウスクリックを処理（ログ対応版）"""
+        # アニメーション中は操作を無効化
+        if self.animating:
+            self.logger.debug("Click ignored - animation in progress")
+            return
+
         grid_pos = self.get_grid_position(mouse_pos)
         if not grid_pos:
             self.logger.debug(f"Click outside grid: {mouse_pos}")
@@ -721,16 +747,11 @@ class Match3Game:
             elif self.are_adjacent(self.selected_block, grid_pos):
                 # 隣接するブロック - 交換を試行
                 self.logger.info(f"Attempting swap: {self.selected_block} <-> {grid_pos}")
-                self.swap_blocks(self.selected_block, grid_pos)
+                self.swap_blocks(self.selected_block, grid_pos, animate=True)
 
-                # マッチをチェックして処理（同期処理）
-                if not self.process_matches():
-                    # マッチしなかった場合は元に戻す
-                    self.logger.info("No matches found, reverting swap")
-                    self.swap_blocks(self.selected_block, grid_pos)
-                else:
-                    self.logger.info("Matches found and processed")
-
+                # アニメーション完了後にマッチ処理を行うため、ここでは処理しない
+                # 代わりにアニメーション完了を待つフラグを設定
+                self.pending_match_check = (self.selected_block, grid_pos)
                 self.selected_block = None
             else:
                 # 隣接しないブロック - 新しい選択
@@ -851,6 +872,66 @@ class Match3Game:
                 self.logger.warning(
                     f"Large time change detected: {old_time:.2f} -> {self.time_left:.2f}"
                 )
+
+        # アニメーション更新
+        self._update_animations(dt)
+
+    def _update_animations(self, dt: float):
+        """すべてのブロックのアニメーションを更新"""
+        any_animating = False
+
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                if self.grid[row][col] and not self.grid[row][col].update_animation(dt):
+                    any_animating = True
+
+        # アニメーション状態の更新
+        was_animating = self.animating
+        self.animating = any_animating
+
+        # アニメーション完了時の処理
+        if was_animating and not self.animating:
+            self._handle_animation_complete()
+
+    def _handle_animation_complete(self):
+        """アニメーション完了時の処理"""
+        if self.pending_match_check:
+            pos1, pos2 = self.pending_match_check
+            self.pending_match_check = None
+
+            # マッチをチェックして処理
+            if not self.process_matches():
+                # マッチしなかった場合は元に戻す
+                self.logger.info("No matches found, reverting swap")
+                self.swap_blocks(pos1, pos2, animate=True)
+            else:
+                self.logger.info("Matches found and processed")
+                # 連鎖処理を開始
+                self._start_cascade_processing()
+
+        # 連鎖チェック処理
+        self._handle_cascade_check()
+
+    def _start_cascade_processing(self):
+        """連鎖処理を開始"""
+        # ブロックを落下させる
+        if self.drop_blocks(animate=True):
+            # 空いたスペースを埋める
+            self.fill_empty_spaces(animate=True)
+            # アニメーション完了後に再度マッチチェックが必要
+            self.pending_cascade_check = True
+        else:
+            # 落下がない場合は空いたスペースのみ埋める
+            self.fill_empty_spaces(animate=True)
+
+    def _handle_cascade_check(self):
+        """連鎖チェック処理"""
+        if hasattr(self, "pending_cascade_check") and self.pending_cascade_check:
+            self.pending_cascade_check = False
+            # 新しいマッチがあるかチェック
+            if self.process_matches():
+                # 新しいマッチがあれば連鎖を続ける
+                self._start_cascade_processing()
 
     def _update_particles(self, dt: float):
         """パーティクルを更新"""

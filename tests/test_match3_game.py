@@ -105,8 +105,8 @@ class TestMatch3Game(unittest.TestCase):
         block1 = self.game.grid[0][0]
         block2 = self.game.grid[0][1]
 
-        # ブロックを交換
-        self.game.swap_blocks((0, 0), (0, 1))
+        # ブロックを交換（アニメーション無効）
+        self.game.swap_blocks((0, 0), (0, 1), animate=False)
 
         # 交換されているかチェック
         self.assertEqual(self.game.grid[0][0], block2)
@@ -202,7 +202,7 @@ class TestMatch3Game(unittest.TestCase):
         self.game.grid[1][0] = None
         self.game.grid[2][0] = None
 
-        moved = self.game.drop_blocks()
+        moved = self.game.drop_blocks(animate=False)
 
         self.assertTrue(moved)
         self.assertIsNone(self.game.grid[0][0])
@@ -219,7 +219,7 @@ class TestMatch3Game(unittest.TestCase):
         self.game.grid[1][1] = None
         self.game.grid[2][2] = None
 
-        self.game.fill_empty_spaces()
+        self.game.fill_empty_spaces(animate=False)
 
         # 空スペースが埋められているかチェック
         self.assertIsNotNone(self.game.grid[0][0])

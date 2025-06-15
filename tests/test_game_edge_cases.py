@@ -106,11 +106,11 @@ class TestGameEdgeCases(unittest.TestCase):
         self.assertEqual(len(matches), 0)
 
         # 落下処理（何も起こらない）
-        moved = self.game.drop_blocks()
+        moved = self.game.drop_blocks(animate=False)
         self.assertFalse(moved)
 
         # 空スペース補充
-        self.game.fill_empty_spaces()
+        self.game.fill_empty_spaces(animate=False)
 
         # 全て埋まっているかチェック
         for row in range(8):
@@ -132,7 +132,7 @@ class TestGameEdgeCases(unittest.TestCase):
                 self.game.grid[row][col] = None
 
         # 落下処理
-        moved = self.game.drop_blocks()
+        moved = self.game.drop_blocks(animate=False)
         self.assertTrue(moved)
 
         # 下4つにブロックが移動しているかチェック
